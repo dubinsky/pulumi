@@ -1,0 +1,140 @@
+plugins {
+  id 'com.github.ben-manes.versions' version '0.44.0'
+  id 'scala'
+  id 'java-library'
+  id 'maven-publish'
+  id 'signing'
+}
+
+description = 'Pulumi tooling'
+group = 'org.podval.tools'
+version = '0.0.1'
+
+final String gitHubRepository = "dubinsky/pulumi"
+final String gitHubRepositoryUrl = "https://github.com/$gitHubRepository"
+final String orgName = 'Podval Group'
+final String orgUrl = 'https://www.podval.org'
+
+dependencies {
+  implementation 'org.scala-lang:scala3-library_3:3.3.0'
+
+  //    implementation 'com.pulumi:pulumi:(,1.0]'
+  implementation 'com.pulumi:pulumi:0.9.5'
+  implementation 'com.pulumi:gcp:6.62.0'
+}
+
+tasks.withType(ScalaCompile).configureEach {
+  scalaCompileOptions.with {
+    targetCompatibility = '' // TODO remove when https://youtrack.jetbrains.com/issue/SCL-18813 is fixed
+    additionalParameters = [
+            '-new-syntax',
+            '-feature',
+            '-language:strictEquality',
+            '-source:future'
+    ]
+  }
+}
+
+jar {
+  manifest {
+    attributes(
+      'Implementation-Title'  : project.description,
+      'Implementation-Version': project.version
+    )
+  }
+}
+
+tasks.register('sourcesJar', Jar) {
+  from sourceSets.main.allSource
+  archiveClassifier.set('sources')
+}
+
+tasks.register('scaladocJar', Jar) {
+  from scaladoc.destinationDir
+  archiveClassifier.set('scaladoc')
+}
+scaladocJar.dependsOn scaladoc
+
+// There is no Java in the project :)
+project.gradle.startParameter.excludedTaskNames.add('compileJava')
+// but Maven Central requires javadoc JAR...
+tasks.register('javadocJar', Jar) {
+  from javadoc.destinationDir
+  archiveClassifier.set('javadoc')
+}
+javadocJar.dependsOn(javadoc)
+
+publishing {
+  repositories {
+    maven {
+      name = 'mavenCentral'
+      url = version.endsWith('SNAPSHOT') ?
+        'https://oss.sonatype.org/content/repositories/snapshots' :
+        'https://oss.sonatype.org/service/local/staging/deploy/maven2'
+
+      // Note: this will use mavenCentralUsername and mavenCentralPassword properties - if they are available
+      credentials(PasswordCredentials)
+    }
+  }
+
+  publications {
+    library(MavenPublication) {
+      from components.java
+      artifact sourcesJar
+      artifact scaladocJar
+      artifact javadocJar
+
+      pom {
+        name = project.name
+        description = project.description
+        url = gitHubRepositoryUrl
+        scm {
+          url = gitHubRepositoryUrl
+          connection = "scm:git:git://github.com/${gitHubRepository}.git"
+          developerConnection = "scm:git:ssh://github.com/${gitHubRepository}.git"
+        }
+        licenses {
+          license {
+            name = 'The Apache Software License, Version 2.0'
+            url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+            distribution = 'repo'
+            comments = 'A business-friendly OSS license'
+          }
+        }
+        organization {
+          name = orgName
+          url = orgUrl
+        }
+        developers {
+          developer {
+            id = 'dub'
+            name = 'Leonid Dubinsky'
+            email = 'dub@podval.org'
+            url = 'https://dub.podval.org'
+            organization = orgName
+            organizationUrl = orgUrl
+            timezone = '-5'
+          }
+        }
+      }
+    }
+  }
+}
+
+signing {
+  useInMemoryPgpKeys(
+    findProperty('gnupg.dub-podval-org.key'),
+    findProperty('gnupg.dub-podval-org.password')
+  )
+  sign publishing.publications.library
+}
+
+tasks.register('uploadLibrary')
+uploadLibrary.description('Upload artifacts')
+uploadLibrary.group('publishing')
+uploadLibrary.dependsOn(publishLibraryPublicationToMavenCentralRepository)
+
+tasks.register('upload')
+upload.description('Upload artifacts and plugins')
+upload.group('publishing')
+upload.dependsOn(uploadLibrary)
