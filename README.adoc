@@ -1,0 +1,605 @@
+:toc:
+:toc-placement: preamble
+:toclevels: 1
+:showtitle:
+
+// Need some preamble to get TOC:
+{empty}
+
+== Introduction
+
+The goal is to do the minimum required to bootstrap Terraform - or Pulumi! - so that further configuration is handled by it.
+Manual steps that can be done in various UI consoles _or_ using command line are given in the command line form.
+
+Install:
+
+- `gcloud` (`google-cloud-cli`) from https://cloud.google.com/sdk/docs/install[cloud.google.com/sdk]
+- `pulumi` from https://www.pulumi.com/docs/install[pulumi.com]
+- `terraform` from https://learn.hashicorp.com/tutorials/terraform/install-cli[hashicorp.com] (or `google-cloud-cli-terraform-tools`)
+- `direnv` from https://direnv.net[direnv.net] (for project-scoped keys)
+
+In the following:
+
+- `domain.tld` is the domain of the organization involved,
+- `admin@domain.tld` is the super-admin of the domain.
+
+During my research into all this, I did stumble onto some mentions of Pulumi,
+but only after I completed the Terraform setup three times and wrote it up
+did I realize that Pulumi is actually an alternative to Terraform - and I like it better ;)
+
+With Pulumi, instead of a Terraform-specific language (HCL), I can use my preferred language (Scala)
+and my preferred build tool (Gradle) to build the description of the state I want
+and update the state to the desired state.
+
+To some extent, I agree that configuration languages
+https://www.haskellforall.com/2020/01/why-dhall-advertises-absence-of-turing.html[should not be Turing complete] - e.g.,
+https://dhall-lang.org[Dhall];
+and that build file should be https://degoes.net/articles/new-scala-build-tool[data, not program]... But having the power of my programming language at my disposal when describing
+the desired state of my cloud infrastructure feels right ;)
+
+Pulumi does not have a Google Workspace provider, so I won't be able to manage the users of my domains with it,
+but the most important part for me is the management of the group memberships -
+and that can be done using the GCP provider (which Pulumi, of course, does have).
+Group settings and _aliases_ can not be managed by Pulumi at this point :(
+
+== Manual Start
+
+In https://domains.google.com[Google Domains]:
+
+- transfer Workspace subscription from Google Domains to Google Workspace
+
+In https://console.cloud.google.com[GCP Console]:
+
+- GCP organization gets auto-created upon login (?)
+- start GCP trial if applicable
+- set up billing
+
+In https://admin.google.com/ac/apps/sites/address[Admin Console]:
+
+- set up billing
+- turn off automatic Google Workspace licensing
+- activate Google Groups for Business (optional)
+
+== Bootstrap
+
+Here we:
+
+- create project
+- enable services in it
+- create service account
+- assign roles to it
+
+[source, shell]
+----
+# log in as a super-admin
+gcloud auth login admin@domain.tld
+
+# create project
+gcloud projects create "domain-infra" \
+  --name="Domain Cloud Infrastructure" --no-enable-cloud-apis
+
+# find out billing `ACCOUNT_ID`
+$ gcloud beta billing accounts list
+
+# link the project to the billing account
+$ gcloud beta billing projects link "domain-infra" \
+  --billing-account ACCOUNT_ID
+$ gcloud config set project "domain-infra"
+
+# enable APIs used by Terraform/Pulumi
+$ gcloud services list --available # all
+$ gcloud services list             # enabled
+
+# "Admin SDK API"
+$ gcloud services enable admin.googleapis.com
+# "Cloud Billing API"
+$ gcloud services enable cloudbilling.googleapis.com
+# "Cloud Resource Manager API": project operations
+$ gcloud services enable cloudresourcemanager.googleapis.com
+# "Identity and Access Management (IAM) API": Service Account creation;
+# also enables iamcredentials.googleapis.com
+$ gcloud services enable iam.googleapis.com
+# "Service Usage API": listing/enabling/disabling services
+$ gcloud services enable serviceusage.googleapis.com
+
+# create a Service Account for running Terraform/Pulumi
+$ gcloud iam service-accounts create terraform \
+  --display-name="terraform" --description="Service Account for Terraform"
+
+# obtain the organization id (org_id)
+$ gcloud organizations list
+
+# grant the Service Account roles needed to bootstrap the rest
+$ gcloud organizations add-iam-policy-binding org_id \
+  --member="serviceAccount:terraform@domain-infra.iam.gserviceaccount.com" \
+  --role="roles/resourcemanager.organizationAdmin"
+
+$ gcloud organizations add-iam-policy-binding org_id \
+  --member="serviceAccount:terraform@domain-infra.iam.gserviceaccount.com" \
+  --role="roles/billing.admin"
+
+$ gcloud organizations add-iam-policy-binding org_id \
+  --member="serviceAccount:terraform@domain-infra.iam.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountAdmin"
+
+# remove default roles from the domain
+$ gcloud organizations remove-iam-policy-binding org_id \
+  --member=domain:domain.tld \
+  --role=roles/billing.creator
+
+$ gcloud organizations remove-iam-policy-binding org_id \
+  --member=domain:domain.tld \
+  --role=roles/resourcemanager.projectCreator
+
+# optional: bulk export of the existing Google Cloud Platform setup
+# in Terraform format
+$ gcloud beta resource-config bulk-export --path=entire-tf-output \
+  --organization=org_id --resource-format=terraform
+----
+
+== Keys
+
+Create and retrieve service account key:
+[source, shell]
+----
+$ gcloud iam service-accounts keys create \
+  /path/to/keys/terraform-domain-infra.json \
+  --iam-account=terraform@domain-infra.iam.gserviceaccount.com
+----
+
+In addition to running `terraform` from the command line locally, it should be possible to run it from `gradle`
+and from GitHub Actions. Giving the service account key to Terraform in an environment variable should enable all the
+scenarios of running it (in GitHub Actions, environment variable is set from a secret).
+
+On a local machine, we use `.envrc` file in the project repository
+that `direnv` processes to set the appropriate environment variables:
+[source, shell]
+----
+export GOOGLE_CREDENTIALS=$(cat /path/to/keys/terraform-domain-infra.json)
+
+# for the google and googleworkspace Terraform providers and google storage backend
+export GOOGLE_CREDENTIALS=$SERVICE_ACCOUNT_KEY
+
+# for the Pulumi GCP provider
+export GOOGLE_CLOUD_KEYFILE_JSON=$SERVICE_ACCOUNT_KEY
+
+export PULUMI_CONFIG_PASSPHRASE=""
+----
+
+== Manual Intermission
+
+To be able to work subdomain-like Google Storage Buckets,
+service account `terraform@domain-infra.iam.gserviceaccount.com` has to be added to the owners of the domain in
+https://www.google.com/webmasters/verification/details?hl=en&domain=domain.tld[Webmaster Central] (see also https://xebia.com/blog/how-to-automate-google-site-verification-with-terraform[]).
+This is required even with the domain in Google Cloud Domains.
+To be able to do this, one needs to first add the property in the
+https://search.google.com/search-console[Search Console] - which is not a bad idea regardless,
+and is also needed to later create organization, account and properties in the
+https://marketingplatform.google.com[Marketing Platform Console].
+
+To be able to Terraform Google Workspace, assign "User Management Admin" and "Group Admin" roles to
+the Terraform service account `terraform@domain-infra.iam.gserviceaccount.com`
+in https://admin.google.com/ac/roles[Google Admin Console]. Pulumi does not have a provider for Google Workspace, so this step does not apply :)
+
+== Core Terraform Files
+
+Create Terraform files describing the setup.
+
+Note: documentation on the https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/storage_bucket[storage bucket]
+states:
+
+[quote]
+If the project id is not set on the resource or in the provider block
+it will be dynamically determined which will require enabling the compute api.
+
+I think it is a good idea to attribute resources to their projects _explicitly_,
+especially since there would normally be multiple projects under Terraform's control...
+
+Note: looping approach borrowed from a https://blog.gruntwork.io/terraform-tips-tricks-loops-if-statements-and-gotchas-f739bbae55f9[blog post].
+
+[source,terraform]
+.main.tf
+----
+locals {
+  gcp_region = "us-east1"
+}
+
+terraform {
+  required_version = ">= 0.14"
+
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = ">=4.35.0"
+    }
+
+    googleworkspace = {
+      source  = "hashicorp/googleworkspace"
+      version = ">=0.7.0"
+    }
+  }
+
+# This stays commented out until the state is migrated into the bucket:
+#  backend "gcs" {
+#    bucket = "state.domain.tld" # locals are not allowed here
+#    prefix = "terraform"
+#  }
+}
+
+provider "google" {
+  region      = local.gcp_region
+}
+
+data "google_organization" "organization" {
+  domain = "domain.tld"
+}
+
+data "google_billing_account" "account" {
+#  display_name    = "My Billing Account"
+  open            = true
+  billing_account = "...." # id
+}
+
+provider "googleworkspace" {
+  customer_id = data.google_organization.organization.directory_customer_id
+  oauth_scopes = [
+    "https://www.googleapis.com/auth/admin.directory.user",
+    "https://www.googleapis.com/auth/admin.directory.userschema",
+    "https://www.googleapis.com/auth/admin.directory.group",
+    "https://www.googleapis.com/auth/apps.groups.settings",
+    "https://www.googleapis.com/auth/admin.directory.domain",
+    "https://www.googleapis.com/auth/admin.directory.rolemanagement",
+    "https://www.googleapis.com/auth/gmail.settings.basic",
+    "https://www.googleapis.com/auth/gmail.settings.sharing",
+    "https://www.googleapis.com/auth/chrome.management.policy",
+    "https://www.googleapis.com/auth/cloud-platform",
+    "https://www.googleapis.com/auth/admin.directory.customer",
+    "https://www.googleapis.com/auth/admin.directory.orgunit",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/cloud-identity.groups",
+  ]
+}
+----
+
+[source,terraform]
+.project-infra.tf
+----
+resource "google_project" "infra" {
+  name                = "Domain Cloud Infrastructure"
+  project_id          = "domain-infra"
+  org_id              = data.google_organization.organization.org_id
+  billing_account     = data.google_billing_account.account.id
+  auto_create_network = true
+  skip_delete         = true
+  timeouts {}
+}
+
+resource "google_project_service" "infra" {
+  project            = google_project.infra.project_id
+  disable_on_destroy = true
+  service            = "${each.value}.googleapis.com"
+  for_each = toset([
+    # "Admin SDK API" for user/group operations
+    "admin",
+    #  for 'gcloud beta resource-config bulk-export'
+    "cloudasset",
+    # "Cloud Billing API"
+    "cloudbilling",
+    "cloudidentity",
+    # "Cloud Resource Manager API" for project operations
+    "cloudresourcemanager",
+    "dns",
+    "domains",
+    # "Google Drive" for rclone
+    "drive",
+    # "Groups Settings API"
+    "groupssettings",
+    # "Identity and Access Management (IAM) API" for Service Account creation
+    "iam",
+    # "IAM Service Account Credentials API"
+    "iamcredentials",
+    "logging",
+    "monitoring",
+    # "Service Usage API" for listing/enabling/disabling services
+    "serviceusage",
+    "storage",
+    "storage-api",
+    "storage-component",
+  ])
+}
+----
+
+[source,terraform]
+.sa-terraform.tf
+----
+resource "google_service_account" "terraform" {
+  account_id   = "terraform"
+  display_name = "terraform"
+  description  = "Service Account for Terraform"
+}
+
+resource "google_organization_iam_member" "terraform" {
+  org_id = data.google_organization.organization.org_id
+  member = "serviceAccount:${google_service_account.terraform.email}"
+  role   = "roles/${each.value}"
+  for_each = toset([
+    "billing.admin",
+    "compute.admin",
+    "dns.admin",
+    "domains.admin",
+    "iam.organizationRoleAdmin",
+    "iam.serviceAccountAdmin",
+    "managedidentities.admin",
+    "resourcemanager.organizationAdmin",
+    "resourcemanager.folderAdmin",
+    "resourcemanager.projectCreator",
+    "serviceusage.serviceUsageAdmin",
+    "storage.admin"
+  ])
+}
+----
+
+[source,terraform]
+.bucket-state.domain.tld.tf
+----
+# bucket to store state
+resource "google_storage_bucket" "state" {
+  project                     = google_project.infra.project_id
+  force_destroy               = true
+  location                    = local.gcp_region
+  name                        = "state.domain.tld"
+  storage_class               = "STANDARD"
+  uniform_bucket_level_access = true
+}
+----
+
+[source,terraform]
+.user-admin.tf
+----
+resource "googleworkspace_user" "admin" {
+  primary_email  = "admin@domain.tld"
+  timeouts {}
+}
+
+resource "google_organization_iam_member" "admin" {
+  org_id = data.google_organization.organization.org_id
+  member = "user:${googleworkspace_user.admin.primary_email}"
+  role   = "roles/${each.value}"
+  for_each = toset([
+    "appengine.appAdmin",
+    "appengine.appCreator",
+    "billing.creator",
+    "billing.admin", // everything but create
+    "cloudasset.owner", // for bulk Terraform export
+    "compute.admin",
+    "firebase.admin", // needed to enable Identity Platform
+    "iam.securityAdmin",
+    "iam.serviceAccountKeyAdmin",
+    "iam.workloadIdentityPoolAdmin",
+    "identityplatform.admin",
+    "logging.admin",
+    "oauthconfig.editor",
+    "resourcemanager.projectMover",
+    "servicemanagement.admin",
+    "serviceusage.serviceUsageAdmin",
+    "serviceusage.apiKeysAdmin",
+    "servicedirectory.admin"
+  ])
+}
+----
+
+== Initialize, Import and Migrate State
+
+Now we are ready to initialize Terraform:
+
+[source,shell]
+----
+$ cd terraform
+
+# initialize
+$ terraform init
+----
+
+Import existing resources into Terraform:
+
+[source,shell]
+----
+# project(s)
+$ terraform import google_project.infra \
+  "projects/domain-infra"
+
+# service account
+$ terraform import google_service_account.terraform \
+  "projects/domain-infra/serviceAccounts/terraform@domain-infra.iam.gserviceaccount.com"
+
+# Google Workspace user(s)
+$ terraform import googleworkspace_user.admin \
+  admin@domain.tld
+
+# Google Storage buckets (if any were created before the switch to Terraform)
+# TODO
+
+# enabled APIs: instead of importing them individually like this
+#   $ terraform import google_project_service.admin_googleapis_com \
+#     domain-infra/admin.googleapis.com
+# I rely on the idempotency and just Terraform the whole map
+# google_project_service.project["..."] over;
+# as a result, initial `terraform apply` might fail
+# and will need to be repeated - depending on the order of modifications.
+----
+
+And finally, the state described by the Terraform files is applied - which means, see the output of `terraform plan` first
+and make sure that - for instance - Google Workspace user's last and first names are reflected in the files
+and do not get wiped out on `terraform apply` :)
+
+[source,shell]
+----
+$ terraform apply
+----
+
+By now, Terraform state bucket exists, and we migrate Terraform state into it (
+see https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/data-sources/remote_state):
+
+In `main.tf`, uncomment `backend "gcs" {...}`.
+Then, move the state to the bucket:
+
+[source,shell]
+----
+$ terraform init -migrate-state
+----
+
+=== Pulumi
+
+Once the bucket for the state is available:
+
+- export the state:
+
+[source,shell]
+----
+$ pulumi stack export --show-secrets --file dev.stack.json
+----
+
+- configure the bucket in `Pulumi.yaml`:
+
+[source,yaml]
+----
+backend:
+  url: gs://state.domain.tld
+----
+
+- initialize and import the stack:
+
+[source,shell]
+----
+$ pulumi stack init
+$ pulumi stack import --file dev.stack.json
+----
+
+== Cloud Identity
+
+In https://admin.google.com/ac/apps/sites/address[Admin Console]:
+- activate Cloud Identity Free (optional)
+
+References:
+- https://cloud.google.com/identity/docs/set-up-cloud-identity-admin[Cloud Identity]
+- https://cloud.google.com/identity/docs/how-to/setup[Identity Setup]
+
+== email
+
+In the olden days of GSuite, it was possible to:
+- add an `*@domain.tld` email alias for the user responsible for the mis-addressed messages
+- configure `Apps | Google Workspace | Settings for Gmail | Routing | Catch-All`
+
+Nowadays, the procedure is as described in
+https://support.google.com/a/answer/12943537[Get misaddressed email in a catch-all mailbox].
+
+== Domains
+
+Domains can be imported from Google Domains into Cloud Domains
+by the owner of the domains (not by the Terraform Service Account).
+Prices in Cloud Domains are the same as in Google Domains.
+Domains can be exported out of the Cloud Domains.
+
+Once imported, domain disappears from Google Domains' list,
+but is visible at `https://domains.google.com/registrar?d=domain.tld`,
+and https://support.google.com/domains/answer/12299086?hl=en[can be added back] by clicking "Add Project".
+
+Website forwarding can still be setup in the Google Domains UI even if the domain is managed by Google Cloud Domains.
+
+Google Terraform provider https://github.com/hashicorp/terraform-provider-google/issues/7696[does not support Cloud Domains] -
+but it does support management of the DNS records for the domains configured to use Google Cloud DNS.
+For each such domain a zone must be Terraformed and then associated with the domain.
+I do not see enough benefits in using Cloud DNS.
+
+Google Domains goes away at the end of 2023, and all the domains from Cloud Domains go with it,
+so I am not sure if it makes sense to move the domains from Google Domains to Cloud Domains either...
+
+[source,shell]
+----
+$ gcloud auth login admin@domain.tld
+$ gcloud domains registrations list-importable-domains
+
+$ gcloud domains registrations import domain.tld
+$ # TODO terraform import
+# assuming zones are terraformed:
+$ gcloud domains registrations configure dns domain.tld \
+  --cloud-dns-zone=domain-tld
+
+# import a zone into Terraform:
+$ terraform import google_dns_managed_zone.domain_tld \
+  projects/domain-infra/managedZones/domain-tld
+
+# disable DNSSEC
+$ gcloud domains registrations configure dns domain.tld \
+  --disable-dnssec
+# switch back from Google Cloud DNF to Google Domains
+$ gcloud domains registrations configure dns domain.tld \
+  --use-google-domains-dns
+----
+
+== Failure to bootstrap for Google Workspace
+
+I tried to use Terraform to assign _GROUPS_ADMIN_ROLE and _USER_MANAGEMENT_ADMIN_ROLE roles to the
+Terraform Service Account; even if it worked, it is probably easier to use the Admin Console - but it didn't work:
+
+[source,shell]
+----
+$ gcloud auth application-default login \
+  --scopes "https://www.googleapis.com/auth/admin.directory.rolemanagement"
+----
+results in:
+[source,text]
+----
+This app is blocked
+This app tried to access sensitive info in your Google Account.
+To keep your account safe, Google blocked this access.
+----
+and `terraform apply` (with all the scopes enabled in the Google Workspace provider!) of
+[source,terraform]
+----
+data "googleworkspace_role" "groups-admin" {
+  name = "_GROUPS_ADMIN_ROLE"
+}
+resource "googleworkspace_role_assignment" "terraform-groups-admin" {
+  role_id     = data.googleworkspace_role.groups-admin.id
+  assigned_to = google_service_account.terraform.unique_id
+  scope_type  = "CUSTOMER"
+}
+data "googleworkspace_role" "user-management-admin" {
+  name = "_USER_MANAGEMENT_ADMIN_ROLE"
+}
+resource "googleworkspace_role_assignment" "terraform-user-management-admin" {
+  role_id     = data.googleworkspace_role.user-management-admin.id
+  assigned_to = google_service_account.terraform.unique_id
+  scope_type  = "CUSTOMER"
+}
+----
+results in:
+[source,text]
+│ Error: googleapi: Error 403: Request had insufficient authentication scopes.
+│ Details:
+│ [{
+│   "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+│   "domain": "googleapis.com",
+│   "metadata": {
+│     "method": "ccc.hosted.frontend.directory.v1.DirectoryRoles.List",
+│     "service": "admin.googleapis.com"
+│   },
+│   "reason": "ACCESS_TOKEN_SCOPE_INSUFFICIENT"
+│ }]
+│
+│ Insufficient Permission ... in data "googleworkspace_role" "groups-admin"
+----
+
+References:
+
+- https://admin.google.com/ac/owl/domainwidedelegation[domain-wide delegation]
+- https://support.google.com/a/answer/2405986?product_name=UnuFlow&visit_id=637986396850085932-3642428519&rd=1&src=supportwidget0[Pre-built administrator roles]
+- https://developers.google.com/admin-sdk/directory/reference/rest/v1/roles/list[rolse.list]
+- https://developers.google.com/admin-sdk/directory/reference/rest/v1/roles/list?apix_params=%7B%22customer%22%3A%22my_customer%22%7D&apix=true[List of roles]
+- https://developers.google.com/identity/protocols/oauth2/scopes[OAuth 2.0 Scopes for Google APIs]
+- https://github.com/jay0lee/google-api-tracker/blob/master/admin-directory_v1.json[API]
+- https://registry.terraform.io/providers/hashicorp/googleworkspace/latest/docs[Google Workspace Terraform Provider]
+- https://github.com/hashicorp/terraform-provider-googleworkspace/blob/v0.6.0/internal/provider/provider.go#L17-L30[its scopes]
+
+Pulumi Gradle command: gradlew run --console=plain
