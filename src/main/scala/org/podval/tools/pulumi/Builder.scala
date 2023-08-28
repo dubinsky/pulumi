@@ -82,71 +82,30 @@ class Builder(
 
   def user(name: String): User = User(name, domain)
 
-  def serviceAccountOrganizationRoles(serviceAccount: Account, roles: String*): Seq[IAMMember] = organizationRoles(
-    serviceAccount.pulumiResourceName,
-    serviceAccount.member,
-    roles*
-  )
-
-  def userOrganizationRoles(user: User, roles: String*): Seq[IAMMember] = organizationRoles(
-    user.resourceName,
-    Output.of(user.resourceName),
-    roles*
-  )
-
-  def groupOrganizationRoles(group: Group, roles: String*): Seq[IAMMember] = organizationRoles(
-    group.pulumiResourceName,
-    Output.of(group.pulumiResourceName),
-    roles*
-  )
-
   // pulumi import "gcp:organizations/iAMMember:IAMMember" "serviceAccount:terraform@infra/role:<role>" "<ORG ID> roles/<role> serviceAccount:terraform@<INFRA PROJECT ID>.iam.gserviceaccount.com"
   // pulumi import "gcp:organizations/iAMMember:IAMMember" "user:<email>/role:<role>" "<ORG ID> roles/<role> user:<email>"
   // pulumi import "gcp:organizations/iAMMember:IAMMember" "group:<email>/role:<role>" "<ORG ID> roles/<role> group:<email>"
-  private def organizationRoles(name: String, member: Output[String], roles: String*): Seq[IAMMember] =
-    for role: String <- roles yield new IAMMember(s"$name/role:$role",
+  def organizationRoles[A: Principal](principal: A, roles: String*): Seq[IAMMember] =
+    for role: String <- roles yield new IAMMember(s"${principal.principalResourceName}/role:$role",
       IAMMemberArgs.builder
         .orgId(organization.applyValue(_.orgId))
-        .member(member)
+        .member(principal.principalMemberOutput)
         .role(s"roles/$role")
         .build
     )
 
-  def serviceAccountProjectRoles(
-    project: Project,
-    serviceAccount: Account,
-    roles: String*
-  ): Seq[ProjectIAMMember] = projectRoles(
-    project,
-    serviceAccount.pulumiResourceName,
-    serviceAccount.member,
-    roles *
-  )
-
-  def userProjectRoles(
-    project: Project,
-    user: User,
-    roles: String*
-  ): Seq[ProjectIAMMember] = projectRoles(
-    project,
-    user.resourceName,
-    Output.of(user.resourceName),
-    roles*
-  )
-
   // pulumi import "gcp:projects/iAMMember:IAMMember" "project:<project id>/role:<role>/user:<email>" "<project id> roles/<role> user:<email>"
   // pulumi import "gcp:projects/iAMMember:IAMMember" "project:<project id>/role:<role>/serviceAccount:<email>" "<project id> roles/<role> serviceAccount:<email>"
-  private def projectRoles(
+  def projectRoles[A: Principal](
     project: Project,
-    name: String,
-    member: Output[String],
+    principal: A,
     roles: String*
   ): Seq[ProjectIAMMember] =
     for role: String <- roles yield new ProjectIAMMember(
-      s"${project.pulumiResourceName}/role:$role/$name",
+      s"${project.pulumiResourceName}/role:$role/${principal.principalResourceName}",
       ProjectIAMMemberArgs.builder
         .project(project.projectId)
-        .member(member)
+        .member(principal.principalMemberOutput)
         .role(s"roles/$role")
         .build
     )
@@ -176,19 +135,18 @@ class Builder(
         .build
     )
 
-  // pulumi import "gcp:storage/bucketIAMMember:BucketIAMMember" "<bucket name>/<role>/<member>" "b/<bucket name> roles/<role> <member>" // <member> - e.g., allUsers
-  def bucketIamMember(
+  // pulumi import "gcp:storage/bucketIAMMember:BucketIAMMember" "<bucket name>/<role>/<member>" "b/<bucket name> roles/<role> <member>"
+  def bucketRoles[A: Principal](
     bucket: Bucket,
-    role: String,
-    memberName: String,
-    member: String
-  ): BucketIAMMember =
-    new BucketIAMMember(
-      s"${bucket.pulumiResourceName}/$role/$memberName",
+    principal: A,
+    roles: String*
+  ): Seq[BucketIAMMember] =
+    for role: String <- roles yield new BucketIAMMember(
+      s"${bucket.pulumiResourceName}/$role/${principal.principalResourceName}",
       BucketIAMMemberArgs.builder
         .bucket(bucket.name)
         .role(s"roles/$role")
-        .member(member)
+        .member(principal.principalMemberOutput)
         .build
     )
 

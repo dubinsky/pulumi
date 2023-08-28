@@ -602,4 +602,8 @@ References:
 - https://registry.terraform.io/providers/hashicorp/googleworkspace/latest/docs[Google Workspace Terraform Provider]
 - https://github.com/hashicorp/terraform-provider-googleworkspace/blob/v0.6.0/internal/provider/provider.go#L17-L30[its scopes]
 
+TODO
+
 Pulumi Gradle command: gradlew run --console=plain
+
+cloud domain registrations are not supported:  projects/202109832805/locations/global/registrations/opentorah.org
