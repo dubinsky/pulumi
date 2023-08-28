@@ -1,0 +1,40 @@
+plugins {
+  id 'idea'
+  id 'com.github.ben-manes.versions' version '0.44.0'
+  id 'scala'
+  id 'application'
+}
+
+description = 'Domain Infrastructure'
+
+application.mainClass = 'tld.domain.infra.Main'
+
+dependencies {
+  implementation 'org.scala-lang:scala3-library_3:3.3.0'
+  implementation 'org.podval.tools:org.podval.tools.pulumi:0.0.2'
+  implementation 'com.pulumi:pulumi:0.9.7'
+  implementation 'com.pulumi:gcp:6.64.0'
+}
+
+idea {
+  module {
+    excludeDirs += [
+      file('.idea'),
+      file('gradle')
+    ]
+  }
+}
+
+// There is no Java in the project :)
+project.gradle.startParameter.excludedTaskNames.add('compileJava')
+
+tasks.withType(ScalaCompile).configureEach {
+  scalaCompileOptions.with {
+    additionalParameters = [
+      '-new-syntax',
+      '-feature',
+      '-language:strictEquality',
+      '-source:future'
+    ]
+  }
+}

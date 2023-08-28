@@ -10,6 +10,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - initial check-in
 - chore: transplanting the blog post
 
-## [0.0.2] - 2023-09-
+## [0.0.2] - 2023-08-30
 - chore: cleanup
-
+- docs: blog post

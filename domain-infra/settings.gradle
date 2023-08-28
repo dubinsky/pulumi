@@ -1,0 +1,26 @@
+pluginManagement {
+  repositories {
+    mavenCentral()
+    gradlePluginPortal()
+  }
+}
+
+dependencyResolutionManagement {
+  repositories {
+    // according to pulumi:
+    maven { // The google mirror is less flaky than mavenCentral()
+      url("https://maven-central.storage-download.googleapis.com/maven2/")
+    }
+
+    mavenCentral()
+
+    maven {
+      name = 'mavenCentralSnapshots'
+      url = 'https://oss.sonatype.org/content/repositories/snapshots'
+    }
+
+    mavenLocal()
+  }
+}
+
+rootProject.name = 'domain-infrastructure'

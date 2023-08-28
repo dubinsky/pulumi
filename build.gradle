@@ -17,9 +17,7 @@ final String orgUrl = 'https://www.podval.org'
 
 dependencies {
   implementation 'org.scala-lang:scala3-library_3:3.3.0'
-
-  //    implementation 'com.pulumi:pulumi:(,1.0]'
-  implementation 'com.pulumi:pulumi:0.9.5'
+  implementation 'com.pulumi:pulumi:0.9.7'
   implementation 'com.pulumi:gcp:6.64.0'
 }
 
@@ -123,8 +121,8 @@ publishing {
 
 signing {
   useInMemoryPgpKeys(
-    findProperty('gnupg.dub-podval-org.key'),
-    findProperty('gnupg.dub-podval-org.password')
+    findProperty('gnupg.dub-podval-org.key') as String,
+    findProperty('gnupg.dub-podval-org.password') as String
   )
   sign publishing.publications.library
 }

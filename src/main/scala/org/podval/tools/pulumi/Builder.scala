@@ -4,7 +4,8 @@ import com.pulumi.Context
 import com.pulumi.core.{Alias, Output}
 import com.pulumi.gcp.cloudidentity.inputs.{GroupGroupKeyArgs, GroupMembershipPreferredMemberKeyArgs, GroupMembershipRoleArgs}
 import com.pulumi.gcp.cloudidentity.{Group, GroupArgs, GroupMembership, GroupMembershipArgs}
-import com.pulumi.gcp.organizations.{IAMMember, IAMMemberArgs, OrganizationsFunctions, Project, ProjectArgs}
+import com.pulumi.gcp.organizations.{IAMMember as OrganizationIAMMember, IAMMemberArgs as OrganizationIAMMemberArgs,
+  OrganizationsFunctions, Project, ProjectArgs}
 import com.pulumi.gcp.organizations.inputs.{GetBillingAccountArgs, GetOrganizationArgs}
 import com.pulumi.gcp.organizations.outputs.{GetBillingAccountResult, GetOrganizationResult}
 import com.pulumi.gcp.projects.{Service, ServiceArgs, IAMMember as ProjectIAMMember, IAMMemberArgs as ProjectIAMMemberArgs}
@@ -20,6 +21,8 @@ class Builder(
   val domain: String,
   val billingAccountDisplayName: String
 ):
+  def user(name: String): User = User(name, domain)
+
   val organization: Output[GetOrganizationResult] = OrganizationsFunctions.getOrganization(GetOrganizationArgs.builder
     .domain(domain)
     .build
@@ -80,14 +83,43 @@ class Builder(
         .build
     )
 
-  def user(name: String): User = User(name, domain)
+  // pulumi import "gcp:storage/bucket:Bucket" "<name>" "<name>"
+  def bucket(
+    project: Project,
+    name: String,
+    location: String,
+    storageClas: String = "STANDARD",
+    forceDestroy: Boolean = false,
+    isPublic: Boolean = false,
+    notFoundPage: Option[String] = None
+  ): Bucket =
 
-  // pulumi import "gcp:organizations/iAMMember:IAMMember" "serviceAccount:terraform@infra/role:<role>" "<ORG ID> roles/<role> serviceAccount:terraform@<INFRA PROJECT ID>.iam.gserviceaccount.com"
+    val result: Bucket = new Bucket(
+      name,
+      BucketArgs.builder
+        .project(project.projectId)
+        .name(name) // TODO do I need this?
+        .storageClass(storageClas)
+        .location(location)
+        .publicAccessPrevention("inherited")
+        .uniformBucketLevelAccess(true)
+        .forceDestroy(forceDestroy)
+        .pipe(builder => notFoundPage.fold(builder)(notFoundPage => builder
+          .website(BucketWebsiteArgs.builder.notFoundPage(notFoundPage).build)
+        ))
+        .build
+    )
+
+    if isPublic then bucketPublic(result)
+
+    result
+
+  // pulumi import "gcp:organizations/iAMMember:IAMMember" "serviceAccount:<id>@<project id>/role:<role>" "<ORG ID> roles/<role> serviceAccount:<id>@<project id>.iam.gserviceaccount.com"
   // pulumi import "gcp:organizations/iAMMember:IAMMember" "user:<email>/role:<role>" "<ORG ID> roles/<role> user:<email>"
   // pulumi import "gcp:organizations/iAMMember:IAMMember" "group:<email>/role:<role>" "<ORG ID> roles/<role> group:<email>"
-  def organizationRoles[A: Principal](principal: A, roles: String*): Seq[IAMMember] =
-    for role: String <- roles yield new IAMMember(s"${principal.principalResourceName}/role:$role",
-      IAMMemberArgs.builder
+  def organizationRoles[A: Principal](principal: A, roles: String*): Seq[OrganizationIAMMember] =
+    for role: String <- roles yield new OrganizationIAMMember(s"${principal.principalResourceName}/role:$role",
+      OrganizationIAMMemberArgs.builder
         .orgId(organization.applyValue(_.orgId))
         .member(principal.principalMemberOutput)
         .role(s"roles/$role")
@@ -102,36 +134,11 @@ class Builder(
     roles: String*
   ): Seq[ProjectIAMMember] =
     for role: String <- roles yield new ProjectIAMMember(
-      s"${project.pulumiResourceName}/role:$role/${principal.principalResourceName}",
+      s"${project.pulumiResourceName}/${principal.principalResourceName}/role:$role",
       ProjectIAMMemberArgs.builder
         .project(project.projectId)
         .member(principal.principalMemberOutput)
         .role(s"roles/$role")
-        .build
-    )
-
-  // pulumi import "gcp:storage/bucket:Bucket" "<name>" "<name>"
-  def bucket(
-    project: Project,
-    name: String,
-    location: String,
-    storageClas: String = "STANDARD",
-    forceDestroy: Boolean = false,
-    notFoundPage: Option[String] = None
-  ): Bucket =
-
-    new Bucket(
-      name,
-      BucketArgs.builder
-        .project(project.projectId)
-        .name(name) // TODO do I need this?
-        .location(location)
-        .publicAccessPrevention("inherited")
-        .uniformBucketLevelAccess(true)
-        .forceDestroy(forceDestroy)
-        .pipe(builder => notFoundPage.fold(builder)(notFoundPage => builder
-          .website(BucketWebsiteArgs.builder.notFoundPage(notFoundPage).build)
-        ))
         .build
     )
 
@@ -142,13 +149,19 @@ class Builder(
     roles: String*
   ): Seq[BucketIAMMember] =
     for role: String <- roles yield new BucketIAMMember(
-      s"${bucket.pulumiResourceName}/$role/${principal.principalResourceName}",
+      s"${bucket.pulumiResourceName}/${principal.principalResourceName}/role:$role",
       BucketIAMMemberArgs.builder
         .bucket(bucket.name)
-        .role(s"roles/$role")
         .member(principal.principalMemberOutput)
+        .role(s"roles/$role")
         .build
     )
+
+  def bucketPublic(bucket: Bucket): Seq[BucketIAMMember] = bucketRoles(
+    bucket = bucket,
+    principal = Principal.AllUsers,
+    roles = "storage.objectViewer"
+  )
 
   // pulumi import "gcp:cloudidentity/group:Group" "group:<group email>" "groups/<group id #>"
   // Note: for members - "memberships", unlike Terraform ids where "members" is used!
