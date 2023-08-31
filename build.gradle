@@ -8,7 +8,7 @@ plugins {
 
 description = 'Pulumi tooling'
 group = 'org.podval.tools'
-version = '0.0.2'
+version = '0.0.3'
 
 final String gitHubRepository = "dubinsky/pulumi"
 final String gitHubRepositoryUrl = "https://github.com/$gitHubRepository"
