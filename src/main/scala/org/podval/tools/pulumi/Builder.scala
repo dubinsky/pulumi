@@ -9,7 +9,7 @@ import com.pulumi.gcp.organizations.{IAMMember as OrganizationIAMMember, IAMMemb
 import com.pulumi.gcp.organizations.inputs.{GetBillingAccountArgs, GetOrganizationArgs}
 import com.pulumi.gcp.organizations.outputs.{GetBillingAccountResult, GetOrganizationResult}
 import com.pulumi.gcp.projects.{Service, ServiceArgs, IAMMember as ProjectIAMMember, IAMMemberArgs as ProjectIAMMemberArgs}
-import com.pulumi.gcp.serviceAccount.{Account, AccountArgs}
+import com.pulumi.gcp.serviceaccount.{Account, AccountArgs}
 import com.pulumi.gcp.storage.inputs.BucketWebsiteArgs
 import com.pulumi.gcp.storage.{Bucket, BucketArgs, BucketIAMMember, BucketIAMMemberArgs}
 import com.pulumi.resources.CustomResourceOptions
@@ -182,17 +182,17 @@ class Builder(
         .build
     )
 
-    def groupMember(user: User, isOwner: Boolean): GroupMembership =
+    def groupMember(user: User, roles: List[GroupMembershipRoleArgs]): GroupMembership =
       new GroupMembership(s"${group.pulumiResourceName}/${user.resourceName}",
         GroupMembershipArgs.builder
           .group(group.id)
           .preferredMemberKey(GroupMembershipPreferredMemberKeyArgs.builder.id(user.email).build)
-          .roles((if isOwner then Builder.groupOwnerRoles else Builder.groupMemberRoles).asJava)
+          .roles(roles.asJava)
           .build
       )
 
-    (for email <- owners  yield groupMember(email, isOwner = true )) ++
-    (for email <- members yield groupMember(email, isOwner = false))
+    (for email <- owners  yield groupMember(email, Builder.groupOwnerRoles )) ++
+    (for email <- members yield groupMember(email, Builder.groupMemberRoles))
 
     group
 

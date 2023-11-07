@@ -2,9 +2,10 @@ package org.podval.tools.pulumi
 
 import com.pulumi.core.Output
 import com.pulumi.gcp.cloudidentity.Group
-import com.pulumi.gcp.serviceAccount.Account
+import com.pulumi.gcp.serviceaccount.Account
+import com.pulumi.resources.Resource
 
-trait Principal[A]:
+sealed trait Principal[A]:
   extension(a: A)
     def principalResourceName: String
     def principalMemberOutput: Output[String] = Output.of(principalResourceName)
@@ -13,18 +14,19 @@ object Principal:
   object AllUsers
 
   given Principal[AllUsers.type] with
-    extension (allUsers: AllUsers.type)
+    extension(allUsers: AllUsers.type)
       override def principalResourceName: String = "allUsers"
 
   given Principal[User] with
     extension(user: User)
       override def principalResourceName: String = user.resourceName
 
-  given Principal[Group] with
-    extension(group: Group)
-      override def principalResourceName: String = group.pulumiResourceName
+  sealed trait ResourcePrincipal[A <: Resource] extends Principal[A]:
+    extension (resource: A)
+      override def principalResourceName: String = resource.pulumiResourceName
 
-  given Principal[Account] with
+  given ResourcePrincipal[Group] = new ResourcePrincipal[Group]{}
+
+  given ResourcePrincipal[Account] with
     extension(serviceAccount: Account)
-      override def principalResourceName: String = serviceAccount.pulumiResourceName
       override def principalMemberOutput: Output[String] = serviceAccount.member
