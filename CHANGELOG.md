@@ -6,12 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.0.1] - 2023-08-24
-- initial check-in
-- chore: transplanting the blog post
+## [0.0.3] - 2023-
+- feat: Besom support
+- docs: Besom support
+- fix: Pulumi/Besom dependencies are compileOnly
+- chore: minor cleanup
+- chore: dependencies and Gradle update
 
 ## [0.0.2] - 2023-08-30
 - chore: cleanup
 - docs: blog post
 
-## [0.0.3] - 2023-
+## [0.0.1] - 2023-08-24
+- initial check-in
+- chore: transplanting the blog post
+

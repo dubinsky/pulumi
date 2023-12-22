@@ -7,7 +7,7 @@ import com.pulumi.gcp.serviceAccount.Account
 import com.pulumi.gcp.storage.{Bucket, BucketArgs}
 import com.pulumi.{Context, Pulumi}
 
-object Main:
+object MainPulumi:
   def main(args: Array[String]): Unit = Pulumi.run((context: Context) => main(context))
 
   private def main(context: Context): Unit =

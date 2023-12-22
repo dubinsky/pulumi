@@ -6,7 +6,7 @@
 // Need some preamble to get TOC:
 We describe the shortest sequence of steps required to bootstrap into an infrastructure-as-code tool so that further configuration of the Google Cloud Platform organization is managed through the tool.
 
-== Which Tool - Pulumi or Terraform?
+== Which Tool - Pulumi or Terraform? Besom!
 
 During my research into all this, I used Terraform;
 although I did stumble onto some mentions of Pulumi,
@@ -25,6 +25,10 @@ e.g., https://dhall-lang.org[Dhall];
 and that build file should be https://degoes.net/articles/new-scala-build-tool[data, not program];
 but having the full power of my programming language at my disposal when describing
 the desired state of my cloud infrastructure feels great ;)
+
+Later still, I found out that there exists a Scala Pulumi SDK: https://github.com/VirtusLab/besom[Besom]; although young, the project is already quite capable,
+is being actively developed by a team of very smart and friendly people.
+Besom facilitates writing Pulumi code in a native Scala style and integrates with the effects systems!
 
 === Google Workspace - Terraform Only
 
@@ -66,7 +70,9 @@ For interacting with Google Cloud: `gcloud` (`google-cloud-cli`) from https://cl
 
 For key management etc.: `direnv` from https://direnv.net[direnv.net].
 
-`Pulumi` from https://www.pulumi.com/docs/install[pulumi.com]
+`Pulumi` from https://www.pulumi.com/docs/install[pulumi.com].
+
+`Besom` from https://github.com/VirtusLab/besom[Besom].
 
 `Terraform` - if you want to use it - from https://learn.hashicorp.com/tutorials/terraform/install-cli[hashicorp.com] (or `google-cloud-cli-terraform-tools`).
 
@@ -236,10 +242,20 @@ In `build.gradle`, we declare dependencies:
 
 - Scala standard library
 - Pulumi helper classes (`org.podval.tools:org.podval.tools.pulumi`) published from this repository
+
+If using Besom:
+
+- Besom ('org.virtuslab:besom-core')
+- Besom Google Cloud Platform provider ('org.virtuslab:besom-gcp')
+
+If using Pulumi:
+
 - Pulumi (`com.pulumi:pulumi`)
 - Pulumi Google Cloud Platform provider (`com.pulumi:gcp`)
 
-Also, we need to add Pulumi project file link:domain-infra/Pulumi.yaml[Pulumi.yaml].
+Also, we need to add Pulumi project file
+link:domain-infra/Pulumi.yaml[Pulumi.yaml]
+and stack file link:domain-infra/Pulumi.dev.yaml[Pulumi.dev.yaml].
 
 The latter specifies the Google Cloud Platform project id of the infrastructure project;
 the former specifies the Google Cloud Storage bucket to use to store Pulumi state -
@@ -248,10 +264,14 @@ until the state migrates into the bucket, those lines need to be commented out.
 The code is packaged as an `application` with the `tld.domain.infra.Main` as a main class:
 `pulumi` command detects the presence of Gradle build file and runs
 the application with `gradlew run --console=plain`.
+Actually, current version of Besom (0.1.0) does not support Gradle build,
+so `Pulumi.yaml` has to reference the application JAR build by Gradle in a manual invocation;
+hopefully, Besom 0.2.0 will restore Gradle support...
 
 Sample Pulumi code is in the link:domain-infra/src[domain-infra/src] folder;
 all of it is contained in one Scala file -
-link:domain-infra/src/main/scala/tld/domain/infra/Main.scala[tld/domain/infra/Main.scala].
+link:domain-infra/src/main/scala/tld/domain/infra/MainBesom.scala[tld/domain/infra/MainBesom.scala] if using Besom or
+link:domain-infra/src/main/scala/tld/domain/infra/MainPulumi.scala[tld/domain/infra/MainPulumi.scala] if not.
 The code uses Pulumi helper classes.
 
 === Terraform
@@ -289,6 +309,7 @@ $ pulumi config set gcp:project domain-infra
 ----
 
 Now, we import existing resources:
+TODO any differences between Besom and Pulumi?
 [source,shell]
 ----
 # project

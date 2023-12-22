@@ -1,0 +1,3 @@
+encryptionsalt: ...
+config:
+  gcp:project: domain-infra
