@@ -264,9 +264,6 @@ until the state migrates into the bucket, those lines need to be commented out.
 The code is packaged as an `application` with the `tld.domain.infra.Main` as a main class:
 `pulumi` command detects the presence of Gradle build file and runs
 the application with `gradlew run --console=plain`.
-Actually, current version of Besom (0.1.0) does not support Gradle build,
-so `Pulumi.yaml` has to reference the application JAR build by Gradle in a manual invocation;
-hopefully, Besom 0.2.0 will restore Gradle support...
 
 Sample Pulumi code is in the link:domain-infra/src[domain-infra/src] folder;
 all of it is contained in one Scala file -

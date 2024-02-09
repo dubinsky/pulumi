@@ -3,7 +3,7 @@ package org.podval.tools.besom
 import besom.{Context, Output}
 import besom.internal.Resource
 import besom.api.gcp.cloudidentity.Group
-import besom.api.gcp.serviceAccount.Account
+import besom.api.gcp.serviceaccount.Account
 
 sealed trait Principal[A]:
   extension(a: Output[A])(using ctx: Context)
@@ -24,7 +24,7 @@ object Principal:
 
   sealed trait ResourcePrincipal[A <: Resource] extends Principal[A]:
     extension (resource: Output[A])(using ctx: Context)
-      override def principalResourceName: Output[String] = resource.flatMap(_.urn).map(_.resourceName)
+      override def principalResourceName: Output[String] = resource.flatMap(_.pulumiResourceName)
 
   given ResourcePrincipal[Group] = new ResourcePrincipal[Group]{}
 

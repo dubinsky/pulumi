@@ -1,11 +1,6 @@
 name: domain-infra
 description: Domain Cloud Infrastructure
-runtime:
-  name: scala # if using Besom
-#  name: java # if not using Besom
-  options: # if using Besom 0.1.0, path to the Pulumi program JAR has to be specified - Gradle build is not supported
-    binary: ...
-
+runtime: scala
 # This stays commented out until the state is migrated into the bucket:
 #backend:
 #  url: gs://state.domain.tld

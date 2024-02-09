@@ -14,12 +14,12 @@ dependencies {
   implementation 'org.podval.tools:org.podval.tools.pulumi:0.0.4'
 
   // if using Besom:
-  implementation 'org.virtuslab:besom-core_3:0.1.0'
-  implementation 'org.virtuslab:besom-gcp_3:6.66.0-core.0.1.0'
+  implementation 'org.virtuslab:besom-core_3:0.2.1'
+  implementation 'org.virtuslab:besom-gcp_3:7.9.0-core.0.2'
 
   // if not using Besom:
-  implementation 'com.pulumi:pulumi:0.9.7'
-  implementation 'com.pulumi:gcp:6.64.0'
+  implementation 'com.pulumi:pulumi:0.9.9'
+  implementation 'com.pulumi:gcp:7.9.0'
 }
 
 idea {

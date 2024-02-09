@@ -6,10 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.0.3] - 2023-
+## [0.0.4] - 2024-02-18
 - feat: Besom support
 - docs: Besom support
 - fix: Pulumi/Besom dependencies are compileOnly
+- Besom 0.2.1 (getOrganization, getBillingAccount)
+- Besom GCP Provider 7
 - chore: minor cleanup
 - chore: dependencies and Gradle update
 
@@ -20,4 +22,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.0.1] - 2023-08-24
 - initial check-in
 - chore: transplanting the blog post
-

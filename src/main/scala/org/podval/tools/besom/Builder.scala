@@ -2,48 +2,43 @@ package org.podval.tools.besom
 
 // TODO import besom.zio.!!!
 import besom.Pulumi.PulumiInterpolationOps
+import besom.{Config, Context, NonEmptyString, Output, Stack}
+import besom.api.gcp.{Provider, ProviderArgs}
 import besom.api.gcp.cloudidentity.inputs.{GroupGroupKeyArgs, GroupMembershipPreferredMemberKeyArgs, GroupMembershipRoleArgs}
 import besom.api.gcp.cloudidentity.{Group, GroupArgs, GroupMembership, GroupMembershipArgs}
-import besom.api.gcp.organizations.{IAMMember as OrganizationIAMMember, IAMMemberArgs as OrganizationIAMMemberArgs,
-  Project, ProjectArgs}
-import besom.api.gcp.projects.{IAMMember as ProjectIAMMember, IAMMemberArgs as ProjectIAMMemberArgs, Service, ServiceArgs}
-import besom.api.gcp.serviceAccount.{Account, AccountArgs}
+import besom.api.gcp.organizations.{GetBillingAccountArgs, GetBillingAccountResult,
+  GetOrganizationArgs, GetOrganizationResult,
+  Project, ProjectArgs, getBillingAccount, getOrganization,
+  IamMember as OrganizationIamMember, IamMemberArgs as OrganizationIamMemberArgs}
+import besom.api.gcp.projects.{Service, ServiceArgs, IamMember as ProjectIamMember, IamMemberArgs as ProjectIamMemberArgs}
+import besom.api.gcp.serviceaccount.{Account, AccountArgs}
 import besom.api.gcp.storage.inputs.BucketWebsiteArgs
-import besom.api.gcp.storage.{Bucket, BucketArgs, BucketIAMMember, BucketIAMMemberArgs}
-import besom.internal.Exports
-import besom.{Context, NonEmptyString, Output, Pulumi}
+import besom.api.gcp.storage.{Bucket, BucketArgs, BucketIamMember, BucketIamMemberArgs}
 
 class Builder(
   context: Context,
   val domain: String,
-  val billingAccountDisplayName: String,
-  val orgId: Output[String],
-  val directoryCustomerId: Output[String],
-  val billingAccountId: Output[String]
+  val billingAccountDisplayName: String
 ):
   private given Context = context
 
-  // TODO get* are not yet available in Besom:
-//  besom.api.gcp.organizations.getOrganization()
-//  val organization: Output[GetOrganizationResult] = OrganizationsFunctions.getOrganization(GetOrganizationArgs.builder
-//    .domain(domain)
-//    .build
-//  )
-//  val orgId: Output[String] = ???
-//  val directoryCustomerId: Output[String] = ???
-//
-//  val billingAccount: Output[GetBillingAccountResult] = OrganizationsFunctions.getBillingAccount(GetBillingAccountArgs.builder
-//    .displayName(billingAccountDisplayName)
-//    .open(true)
-//    .build
-//  )
-//  val billingAccountId: Output[String]
-//
+  val projectId: Output[String] = Config("gcp").requireString("project")
+  val provider: Output[Provider] = Provider("provider:gcp", ProviderArgs(project = projectId))
+//  private val providerOptions = CustomResourceOptions(provider = provider)
 
-  def exports: Exports = Pulumi.exports(
+  val organization: Output[GetOrganizationResult] = getOrganization(GetOrganizationArgs(domain = domain))
+  val orgId: Output[String] = organization.orgId
+  val directoryCustomerId: Output[String] = organization.directoryCustomerId
+
+  val billingAccount: Output[GetBillingAccountResult] = getBillingAccount(GetBillingAccountArgs(displayName = billingAccountDisplayName))
+  val billingAccountId: Output[String] = billingAccount.id
+
+  def exports(stack: Stack): Stack = stack.exports(
+    domain = domain,
+    projectId = projectId,
+    orgId = orgId,
     billingAccount = billingAccountId,
-    directoryCustomerId = directoryCustomerId,
-    orgId = orgId
+    directoryCustomerId = directoryCustomerId
   )
 
   def user(name: String): User = User(name, domain)
@@ -56,7 +51,7 @@ class Builder(
     labels: Map[String, String] = Map.empty,
     autoCreateNetwork: Boolean = true
   )(serviceNames: String*): Output[Project] =
-    val project: Output[Project] = Project(s"project:$id", ProjectArgs(
+    val project: Output[Project] = Project(name = s"project:$id", ProjectArgs(
       orgId = orgId,
       billingAccount = billingAccountId,
       projectId = id,
@@ -76,7 +71,7 @@ class Builder(
     yield
       project
 
-  // pulumi import "gcp:serviceAccount/account:Account" "serviceAccount:<id>@<project id>" "projects/<project id>/serviceAccounts/<id>@<project id>.iam.gserviceaccount.com"
+  // pulumi import "gcp:serviceaccount/account:Account" "serviceAccount:<id>@<project id>" "projects/<project id>/serviceAccounts/<id>@<project id>.iam.gserviceaccount.com"
   def serviceAccount(
     project: Output[Project],
     id: String,
@@ -126,10 +121,10 @@ class Builder(
   // pulumi import "gcp:organizations/iAMMember:IAMMember" "serviceAccount:<id>@<project id>/role:<role>" "<ORG ID> roles/<role> serviceAccount:<id>@<project id>.iam.gserviceaccount.com"
   // pulumi import "gcp:organizations/iAMMember:IAMMember" "user:<email>/role:<role>" "<ORG ID> roles/<role> user:<email>"
   // pulumi import "gcp:organizations/iAMMember:IAMMember" "group:<email>/role:<role>" "<ORG ID> roles/<role> group:<email>"
-  def organizationRole[A: Principal](principal: Output[A], role: String): Output[OrganizationIAMMember] =
+  def organizationRole[A: Principal](principal: Output[A], role: String): Output[OrganizationIamMember] =
     for
       principalResourceName <- principal.principalResourceName
-      result <- OrganizationIAMMember(s"$principalResourceName/role:$role", OrganizationIAMMemberArgs(
+      result <- OrganizationIamMember(s"$principalResourceName/role:$role", OrganizationIamMemberArgs(
         orgId = orgId,
         member = principal.principalMember,
         role = s"roles/$role"
@@ -137,7 +132,7 @@ class Builder(
     yield
       result
 
-  def organizationRoles[A: Principal](principal: Output[A], roles: String*): Output[Seq[OrganizationIAMMember]] =
+  def organizationRoles[A: Principal](principal: Output[A], roles: String*): Output[Seq[OrganizationIamMember]] =
     Output.sequence(for role <- roles yield organizationRole(principal, role))
 
   // pulumi import "gcp:projects/iAMMember:IAMMember" "project:<project id>/role:<role>/user:<email>" "<project id> roles/<role> user:<email>"
@@ -146,12 +141,12 @@ class Builder(
     project: Output[Project],
     principal: Output[A],
     role: String
-  ): Output[ProjectIAMMember] =
+  ): Output[ProjectIamMember] =
     for
       projectId <- project.projectId
       principalResourceName <- principal.principalResourceName
-      result <- ProjectIAMMember(
-        s"project:$projectId/$principalResourceName/role:$role", ProjectIAMMemberArgs(
+      result <- ProjectIamMember(
+        s"project:$projectId/$principalResourceName/role:$role", ProjectIamMemberArgs(
           project = project.projectId,
           member = principal.principalMember,
           role = s"roles/$role"
@@ -163,7 +158,7 @@ class Builder(
     project: Output[Project],
     principal: Output[A],
     roles: String*
-  ): Output[Seq[ProjectIAMMember]] =
+  ): Output[Seq[ProjectIamMember]] =
     Output.sequence(for role: String <- roles yield projectRole(project, principal, role))
 
   // pulumi import "gcp:storage/bucketIAMMember:BucketIAMMember" "<bucket name>/<role>/<member>" "b/<bucket name> roles/<role> <member>"
@@ -171,12 +166,12 @@ class Builder(
     bucket: Output[Bucket],
     principal: Output[A],
     role: String
-  ): Output[BucketIAMMember] =
+  ): Output[BucketIamMember] =
     for
       bucketName <- bucket.name
       principalResourceName <- principal.principalResourceName
-      result <- BucketIAMMember(
-        s"$bucketName/$principalResourceName/role:$role", BucketIAMMemberArgs(
+      result <- BucketIamMember(
+        s"$bucketName/$principalResourceName/role:$role", BucketIamMemberArgs(
           bucket = bucket.name,
           member = principal.principalMember,
           role = s"roles/$role"
@@ -187,10 +182,10 @@ class Builder(
     bucket: Output[Bucket],
     principal: Output[A],
     roles: String*
-  ): Output[Seq[BucketIAMMember]] =
+  ): Output[Seq[BucketIamMember]] =
     Output.sequence(for role: String <- roles yield bucketRole(bucket, principal, role))
 
-  def bucketPublic(bucket: Output[Bucket]): Output[Seq[BucketIAMMember]] = bucketRoles(
+  def bucketPublic(bucket: Output[Bucket]): Output[Seq[BucketIamMember]] = bucketRoles(
     bucket = bucket,
     principal = Output(Principal.AllUsers),
     roles = "storage.objectViewer"
@@ -236,10 +231,6 @@ class Builder(
 object Builder:
 //  private def alias(name: String) = CustomResourceOptions.builder
 //    .aliases(Alias.builder.name(name).build)
-//    .build
-//
-//  private val protect: CustomResourceOptions = CustomResourceOptions.builder
-//    .protect(true)
 //    .build
 
   private val groupLabels: Map[String, String] = Map("cloudidentity.googleapis.com/groups.discussion_forum" -> "")

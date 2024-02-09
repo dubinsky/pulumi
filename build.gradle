@@ -18,12 +18,12 @@ final String orgUrl = 'https://www.podval.org'
 dependencies {
   implementation 'org.scala-lang:scala3-library_3:3.3.1'
 
-  // TODO? scalaCompilerPlugins "org.virtuslab:besom-compiler-plugin_3:0.1.0"
-  compileOnly 'org.virtuslab:besom-core_3:0.1.0'
-  compileOnly 'org.virtuslab:besom-gcp_3:6.66.0-core.0.1.0'
+  // TODO? scalaCompilerPlugins "org.virtuslab:besom-compiler-plugin_3:0.2.1"
+  compileOnly 'org.virtuslab:besom-core_3:0.2.1'
+  compileOnly 'org.virtuslab:besom-gcp_3:7.9.0-core.0.2'
 
-  compileOnly 'com.pulumi:pulumi:0.9.8'
-  compileOnly 'com.pulumi:gcp:7.0.0'
+  compileOnly 'com.pulumi:pulumi:0.9.9'
+  compileOnly 'com.pulumi:gcp:7.9.0'
 }
 
 tasks.withType(ScalaCompile).configureEach {
