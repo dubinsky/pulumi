@@ -8,7 +8,7 @@ plugins {
 
 description = 'Pulumi tooling'
 group = 'org.podval.tools'
-version = '0.0.4'
+version = '0.1.0'
 
 final String gitHubRepository = "dubinsky/pulumi"
 final String gitHubRepositoryUrl = "https://github.com/$gitHubRepository"
@@ -16,7 +16,7 @@ final String orgName = 'Podval Group'
 final String orgUrl = 'https://www.podval.org'
 
 dependencies {
-  implementation 'org.scala-lang:scala3-library_3:3.3.1'
+  implementation 'org.scala-lang:scala3-library_3:3.4.0'
 
   // TODO? scalaCompilerPlugins "org.virtuslab:besom-compiler-plugin_3:0.2.1"
   compileOnly 'org.virtuslab:besom-core_3:0.2.1'

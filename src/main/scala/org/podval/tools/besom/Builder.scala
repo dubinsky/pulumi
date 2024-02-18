@@ -42,53 +42,50 @@ class Builder(
   )
 
   def user(name: String): User = User(name, domain)
+  def userOutput(name: String): Output[User] = Output(User(name, domain))
 
   // pulumi import "gcp:organizations/project:Project" "project:<project id>" "projects/<project id>"
-  // pulumi import "gcp:projects/service:Service" "project:<project id>/service:<service>" "<project id>/<service>.googleapis.com"
   def project(
     id: String,
     displayName: String,
     labels: Map[String, String] = Map.empty,
     autoCreateNetwork: Boolean = true
-  )(serviceNames: String*): Output[Project] =
-    val project: Output[Project] = Project(name = s"project:$id", ProjectArgs(
-      orgId = orgId,
-      billingAccount = billingAccountId,
-      projectId = id,
-      name = displayName,
-      labels = if labels.isEmpty then None else Some(labels),
-      autoCreateNetwork = autoCreateNetwork
+  ): Output[Project] = Project(name = s"project:$id", ProjectArgs(
+    orgId = orgId,
+    billingAccount = billingAccountId,
+    projectId = id,
+    name = displayName,
+    labels = if labels.isEmpty then None else Some(labels),
+    autoCreateNetwork = autoCreateNetwork
+  ))
+  
+  // pulumi import "gcp:projects/service:Service" "project:<project id>/service:<service>" "<project id>/<service>.googleapis.com"
+  def projectServices(project: Output[Project], serviceNames: String*): Output[Seq[Service]] =
+    Output.sequence(for serviceName <- serviceNames yield projectService(project, serviceName))
+
+  def projectService(project: Output[Project], serviceName: String): Output[Service] = for
+    projectId: String <- project.projectId
+    result: Service <- Service(s"project:$projectId/service:$serviceName", ServiceArgs(
+      project = projectId,
+      service = s"$serviceName.googleapis.com"
     ))
-
-    def mkService(name: String) = Service(s"project:$id/service:$name", ServiceArgs(
-      project = id,
-      service = s"$name.googleapis.com"
-    ))
-
-    for
-      project <- project
-      _ <- Output.sequence(serviceNames.map(mkService))
-    yield
-      project
-
+  yield result  
+  
   // pulumi import "gcp:serviceaccount/account:Account" "serviceAccount:<id>@<project id>" "projects/<project id>/serviceAccounts/<id>@<project id>.iam.gserviceaccount.com"
   def serviceAccount(
     project: Output[Project],
     id: String,
     displayName: String,
     description: String
-  ): Output[Account] =
-    for
-      project <- project
-      projectId <- project.projectId
-      serviceAccount <- Account(s"serviceAccount:$id@$projectId", AccountArgs(
-        project = projectId,
-        accountId = id,
-        displayName = displayName,
-        description = description
-      ))
-    yield
-      serviceAccount
+  ): Output[Account] = for
+    projectId <- project.projectId
+    result <- Account(s"serviceAccount:$id@$projectId", AccountArgs(
+      project = projectId,
+      accountId = id,
+      displayName = displayName,
+      description = description
+    ))
+  yield result
 
   // pulumi import "gcp:storage/bucket:Bucket" "<name>" "<name>"
   def bucket(
@@ -97,40 +94,31 @@ class Builder(
     location: String,
     storageClas: String = "STANDARD",
     forceDestroy: Boolean = false,
-    isPublic: Boolean = false,
     notFoundPage: Option[String] = None
-  ): Output[Bucket] =
-
-    val result: Output[Bucket] = Bucket(name, BucketArgs(
-      project = project.projectId,
-      name = name, // TODO do I need this?
-      storageClass = storageClas,
-      location = location,
-      publicAccessPrevention = "inherited",
-      uniformBucketLevelAccess = true,
-      forceDestroy = forceDestroy,
-      website = notFoundPage.map(notFoundPage => BucketWebsiteArgs(
-        notFoundPage = notFoundPage
-      ))
+  ): Output[Bucket] = Bucket(name, BucketArgs(
+    project = project.projectId,
+    name = name, // TODO do I need this?
+    storageClass = storageClas,
+    location = location,
+    publicAccessPrevention = "inherited",
+    uniformBucketLevelAccess = true,
+    forceDestroy = forceDestroy,
+    website = notFoundPage.map(notFoundPage => BucketWebsiteArgs(
+      notFoundPage = notFoundPage
     ))
-
-    if isPublic then bucketPublic(result)
-
-    result
-
+  ))
+  
   // pulumi import "gcp:organizations/iAMMember:IAMMember" "serviceAccount:<id>@<project id>/role:<role>" "<ORG ID> roles/<role> serviceAccount:<id>@<project id>.iam.gserviceaccount.com"
   // pulumi import "gcp:organizations/iAMMember:IAMMember" "user:<email>/role:<role>" "<ORG ID> roles/<role> user:<email>"
   // pulumi import "gcp:organizations/iAMMember:IAMMember" "group:<email>/role:<role>" "<ORG ID> roles/<role> group:<email>"
-  def organizationRole[A: Principal](principal: Output[A], role: String): Output[OrganizationIamMember] =
-    for
-      principalResourceName <- principal.principalResourceName
-      result <- OrganizationIamMember(s"$principalResourceName/role:$role", OrganizationIamMemberArgs(
-        orgId = orgId,
-        member = principal.principalMember,
-        role = s"roles/$role"
-      ))
-    yield
-      result
+  def organizationRole[A: Principal](principal: Output[A], role: String): Output[OrganizationIamMember] = for
+    principalResourceName <- principal.principalResourceName
+    result <- OrganizationIamMember(s"$principalResourceName/role:$role", OrganizationIamMemberArgs(
+      orgId = orgId,
+      member = principal.principalMember,
+      role = s"roles/$role"
+    ))
+  yield result
 
   def organizationRoles[A: Principal](principal: Output[A], roles: String*): Output[Seq[OrganizationIamMember]] =
     Output.sequence(for role <- roles yield organizationRole(principal, role))
@@ -141,18 +129,16 @@ class Builder(
     project: Output[Project],
     principal: Output[A],
     role: String
-  ): Output[ProjectIamMember] =
-    for
-      projectId <- project.projectId
-      principalResourceName <- principal.principalResourceName
-      result <- ProjectIamMember(
-        s"project:$projectId/$principalResourceName/role:$role", ProjectIamMemberArgs(
-          project = project.projectId,
-          member = principal.principalMember,
-          role = s"roles/$role"
-      ))
-    yield
-      result
+  ): Output[ProjectIamMember] = for
+    projectId <- project.projectId
+    principalResourceName <- principal.principalResourceName
+    result <- ProjectIamMember(
+      s"project:$projectId/$principalResourceName/role:$role", ProjectIamMemberArgs(
+        project = project.projectId,
+        member = principal.principalMember,
+        role = s"roles/$role"
+    ))
+  yield result
 
   def projectRoles[A: Principal](
     project: Output[Project],
@@ -166,17 +152,16 @@ class Builder(
     bucket: Output[Bucket],
     principal: Output[A],
     role: String
-  ): Output[BucketIamMember] =
-    for
-      bucketName <- bucket.name
-      principalResourceName <- principal.principalResourceName
-      result <- BucketIamMember(
-        s"$bucketName/$principalResourceName/role:$role", BucketIamMemberArgs(
-          bucket = bucket.name,
-          member = principal.principalMember,
-          role = s"roles/$role"
-        ))
-    yield result
+  ): Output[BucketIamMember] = for
+    bucketName <- bucket.name
+    principalResourceName <- principal.principalResourceName
+    result <- BucketIamMember(
+      s"$bucketName/$principalResourceName/role:$role", BucketIamMemberArgs(
+        bucket = bucket.name,
+        member = principal.principalMember,
+        role = s"roles/$role"
+      ))
+  yield result
 
   def bucketRoles[A: Principal](
     bucket: Output[Bucket],
@@ -198,9 +183,9 @@ class Builder(
     name: String,
     displayName: String,
     description: String
-  )(owners: User*)(members: User*): Output[Group] =
+  ): Output[Group] =
     val groupEmail: String = s"$name@$domain"
-    val group: Output[Group] = Group(s"group:$groupEmail", GroupArgs(
+    Group(s"group:$groupEmail", GroupArgs(
         displayName = displayName,
         description = description,
         groupKey = GroupGroupKeyArgs(id = groupEmail),
@@ -208,25 +193,26 @@ class Builder(
         parent = pulumi"customers/$directoryCustomerId"
     ))
 
-    def groupMember(user: User, roles: List[GroupMembershipRoleArgs]): Output[GroupMembership] =
-      GroupMembership(s"group:$groupEmail/${user.resourceName}", GroupMembershipArgs(
-        group = group.id,
-        preferredMemberKey = GroupMembershipPreferredMemberKeyArgs(id = user.email),
-        roles = roles
-      ))
+  def groupOwners(group: Output[Group], users: User*): Output[Seq[GroupMembership]] =
+    Output.sequence(for user <- users yield groupMembership(group, user, List(groupRole("MEMBER"), groupRole("OWNER"))))
+    
+  def groupMembers(group: Output[Group], users: User*): Output[Seq[GroupMembership]] =
+    Output.sequence(for user <- users yield groupMembership(group, user, List(groupRole("MEMBER"))))
 
-    for
-      group <- group
-      _ <- Output.sequence(
-        (for email <- owners  yield groupMember(email, groupOwnerRoles )) ++
-        (for email <- members yield groupMember(email, groupMemberRoles))
-      )
-    yield
-      group
-
+  def groupMembership(
+    group: Output[Group],
+    user: User, 
+    roles: List[GroupMembershipRoleArgs]
+  ): Output[GroupMembership] = for
+    groupEmail: String <- group.groupKey.id
+    result: GroupMembership <- GroupMembership(s"group:$groupEmail/${user.resourceName}", GroupMembershipArgs(
+      group = group.id,
+      preferredMemberKey = GroupMembershipPreferredMemberKeyArgs(id = user.email),
+      roles = roles
+    ))
+  yield result  
+    
   private def groupRole(name: String): GroupMembershipRoleArgs = GroupMembershipRoleArgs(name = name)
-  private val groupMemberRoles: List[GroupMembershipRoleArgs] = List(groupRole("MEMBER"))
-  private val groupOwnerRoles: List[GroupMembershipRoleArgs] = List(groupRole("MEMBER"), groupRole("OWNER"))
 
 object Builder:
 //  private def alias(name: String) = CustomResourceOptions.builder

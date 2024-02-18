@@ -455,6 +455,38 @@ $ gcloud domains registrations configure dns domain.tld \
   --use-google-domains-dns
 ----
 
+== GCP Provider Upgrade - Pulumi/Besom
+
+With Pulumi GCP provider upgrade from 6.x to 7.x,
+`serviceAccount` got renamed to `serviceaccount`,
+which broke my existing stacks,
+and the only way I found to fix the breakage requires manual
+local changes to the Pulumi state of the stack:
+
+[source,shell]
+----
+# brin the stack to the local machine:
+$ pulumi stack export --show-secrets --file dev.stack.json
+# delete the stack and thus its state files from the state bucket
+# in `Pulumi.yaml`, comment out the state bucket configuration
+# tell Pulumi to place its files under `.pulumi`
+$ pulumi login file://.
+$ pulumi stack init dev
+$ pulumi stack import --file dev.stack.json
+
+# fix up the state file:
+# - change the GCP provider version
+# - fix up the `gcp:serviceAccount` to `gcp:serviceaccount`
+
+# once `pulumi up` works again, move the state back to the bucket:
+$ pulumi stack export --show-secrets --file dev.stack.json
+# in `Pulumi.yaml`, uncomment the state bucket configuration
+$ pulumi stack rm --force dev
+$ pulumi stack init dev
+# restore whatever configuration disappeared from the `Pulumi.dev.yaml` file
+$ pulumi stack import --file dev.stack.json
+----
+
 == GCP Groups
 
 https://console.cloud.google.com/cloud-setup[Cloud Setup Checklist]
