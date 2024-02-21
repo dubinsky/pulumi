@@ -1,6 +1,5 @@
 package org.podval.tools.besom
 
-// TODO import besom.zio.!!!
 import besom.Pulumi.PulumiInterpolationOps
 import besom.{Config, Context, NonEmptyString, Output, Stack}
 import besom.api.gcp.{Provider, ProviderArgs}

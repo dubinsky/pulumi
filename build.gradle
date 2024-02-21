@@ -8,7 +8,7 @@ plugins {
 
 description = 'Pulumi tooling'
 group = 'org.podval.tools'
-version = '0.1.0'
+version = '0.2.0'
 
 final String gitHubRepository = "dubinsky/pulumi"
 final String gitHubRepositoryUrl = "https://github.com/$gitHubRepository"
@@ -18,22 +18,19 @@ final String orgUrl = 'https://www.podval.org'
 dependencies {
   implementation 'org.scala-lang:scala3-library_3:3.4.0'
 
-  // TODO? scalaCompilerPlugins "org.virtuslab:besom-compiler-plugin_3:0.2.1"
-  compileOnly 'org.virtuslab:besom-core_3:0.2.1'
+  // TODO? scalaCompilerPlugins "org.virtuslab:besom-compiler-plugin_3:0.2.2"
+  compileOnly 'org.virtuslab:besom-core_3:0.2.2'
   compileOnly 'org.virtuslab:besom-gcp_3:7.9.0-core.0.2'
-
-  compileOnly 'com.pulumi:pulumi:0.9.9'
-  compileOnly 'com.pulumi:gcp:7.9.0'
 }
 
 tasks.withType(ScalaCompile).configureEach {
   scalaCompileOptions.with {
     targetCompatibility = '' // TODO remove when https://youtrack.jetbrains.com/issue/SCL-18813 is fixed
     additionalParameters = [
-            '-new-syntax',
-            '-feature',
-            '-language:strictEquality',
-            '-source:future'
+      '-new-syntax',
+      '-feature',
+      '-language:strictEquality',
+      '-source:future'
     ]
   }
 }
@@ -132,12 +129,7 @@ signing {
   sign publishing.publications.library
 }
 
-tasks.register('uploadLibrary')
-uploadLibrary.description('Upload artifacts')
-uploadLibrary.group('publishing')
-uploadLibrary.dependsOn(publishLibraryPublicationToMavenCentralRepository)
-
 tasks.register('upload')
-upload.description('Upload artifacts and plugins')
+upload.description('Upload artifacts')
 upload.group('publishing')
-upload.dependsOn(uploadLibrary)
+upload.dependsOn(publishLibraryPublicationToMavenCentralRepository)

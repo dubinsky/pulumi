@@ -6,7 +6,7 @@
 // Need some preamble to get TOC:
 We describe the shortest sequence of steps required to bootstrap into an infrastructure-as-code tool so that further configuration of the Google Cloud Platform organization is managed through the tool.
 
-== Which Tool - Pulumi or Terraform? Besom!
+== Which Tool - Terraform or Pulumi? Besom!
 
 During my research into all this, I used Terraform;
 although I did stumble onto some mentions of Pulumi,
@@ -27,10 +27,12 @@ but having the full power of my programming language at my disposal when describ
 the desired state of my cloud infrastructure feels great ;)
 
 Later still, I found out that there exists a Scala Pulumi SDK: https://github.com/VirtusLab/besom[Besom]; although young, the project is already quite capable,
-is being actively developed by a team of very smart and friendly people.
-Besom facilitates writing Pulumi code in a native Scala style and integrates with the effects systems!
+and is being actively developed by a team of very smart and friendly people.
+Besom facilitates writing Pulumi code in a native Scala style and integrates with the effects systems! Using Besom SDK with Pulumi is my current choice.
 
-=== Google Workspace - Terraform Only
+(Notes on Terraform are in link:README-terraform.adoc[README-terraform])
+
+== Google Workspace - Terraform Only
 
 Unlike https://registry.terraform.io/providers/hashicorp/googleworkspace/latest/docs[Terraform],
 Pulumi does not have a Google Workspace provider, so some things can not be managed using Pulumi.
@@ -42,9 +44,6 @@ using the GCP provider (which Pulumi, of course, does have).
 
 Changing group settings and _aliases_ can not be done with Pulumi at this point,
 and I _do_ miss this functionality.
-
-In the sample Terraform files, fragments that rely on the Google Workspace provider
-are commented out and marked with `using Workspace provider`.
 
 == Consoles
 
@@ -74,13 +73,11 @@ For key management etc.: `direnv` from https://direnv.net[direnv.net].
 
 `Besom` from https://github.com/VirtusLab/besom[Besom].
 
-`Terraform` - if you want to use it - from https://learn.hashicorp.com/tutorials/terraform/install-cli[hashicorp.com] (or `google-cloud-cli-terraform-tools`).
-
 == Structure
 
-Sample setup for both Pulumi and Terraform is in the link:domain-infra[domain-infra] folder.
+Sample setup for Pulumi/Besom is in the link:domain-infra/besom/[domain-infra/besom] folder.
 
-In the following and in the sample files for Pulumi and Terraform,
+In the following and in the sample files,
 
 - `domain.tld` is the domain of the organization involved
 - `admin@domain.tld` is the super-admin of the domain
@@ -107,7 +104,7 @@ In https://admin.google.com/ac/apps/sites/address[Admin Console]:
 
 Here we:
 
-- create project
+- create a project
 - enable services in it
 - create service account
 - assign roles to it
@@ -129,7 +126,7 @@ $ gcloud beta billing projects link "domain-infra" \
   --billing-account ACCOUNT_ID
 $ gcloud config set project "domain-infra"
 
-# enable APIs used by Pulumi or Terraform
+# enable APIs used for the infrastructure setup
 $ gcloud services list --available # all
 $ gcloud services list             # enabled
 
@@ -146,7 +143,7 @@ $ gcloud services enable iam.googleapis.com
 # "Service Usage API": listing/enabling/disabling services
 $ gcloud services enable serviceusage.googleapis.com
 
-# create a Service Account for running Pulumi or Terraform
+# create a Service Account for the infrastructure work
 $ gcloud iam service-accounts create terraform \
   --display-name="terraform" --description="Service Account for Terraform"
 
@@ -189,14 +186,14 @@ $ gcloud iam service-accounts keys create \
   --iam-account=terraform@domain-infra.iam.gserviceaccount.com
 ----
 
-In addition to running `pulumi` or `terraform` from the command line locally,
+In addition to running `pulumi` from the command line locally,
 it should be possible to run it from `gradle` and from GitHub Actions.
 Giving the service account key to the tool in an environment variable should enable
 all the scenarios of running it.
 
 On a local machine, we use `.envrc` file in the project repository
 that `direnv` processes to set the appropriate environment variables;
-see link:domain-infra/.envrc[.envrc].
+see link:domain-infra/besom/.envrc[.envrc].
 
 In GitHub Actions, environment variables are set from secrets.
 
@@ -213,18 +210,7 @@ https://marketingplatform.google.com[Google Marketing Platform].
 
 Note: see also https://xebia.com/blog/how-to-automate-google-site-verification-with-terraform
 
-== Google Workspace Authorization
-
-If using Google Workspace Terraform provider to manage users and groups,
-assign "User Management Admin" and "Group Admin" roles to
-the Terraform service account `terraform@domain-infra.iam.gserviceaccount.com`
-in https://admin.google.com/ac/roles[Admin Console].
-
-Pulumi does not have a provider for Google Workspace, so this step does not apply :)
-
 == Setup
-
-=== Pulumi
 
 Since Pulumi setup uses Gradle, appropriate Gradle files need to be added to the project:
 
@@ -235,27 +221,19 @@ Since Pulumi setup uses Gradle, appropriate Gradle files need to be added to the
 
 Setup also requires Gradle build files for the project:
 
-- link:domain-infra/settings.gradle[settings.gradle]
-- link:domain-infra/build.gradle[build.gradle]
+- link:domain-infra/besom/settings.gradle[settings.gradle]
+- link:domain-infra/besom/build.gradle[build.gradle]
 
 In `build.gradle`, we declare dependencies:
 
 - Scala standard library
 - Pulumi helper classes (`org.podval.tools:org.podval.tools.pulumi`) published from this repository
-
-If using Besom:
-
 - Besom ('org.virtuslab:besom-core')
 - Besom Google Cloud Platform provider ('org.virtuslab:besom-gcp')
 
-If using Pulumi:
-
-- Pulumi (`com.pulumi:pulumi`)
-- Pulumi Google Cloud Platform provider (`com.pulumi:gcp`)
-
 Also, we need to add Pulumi project file
-link:domain-infra/Pulumi.yaml[Pulumi.yaml]
-and stack file link:domain-infra/Pulumi.dev.yaml[Pulumi.dev.yaml].
+link:domain-infra/besom/Pulumi.yaml[Pulumi.yaml]
+and stack file link:domain-infra/besom/Pulumi.dev.yaml[Pulumi.dev.yaml].
 
 The latter specifies the Google Cloud Platform project id of the infrastructure project;
 the former specifies the Google Cloud Storage bucket to use to store Pulumi state -
@@ -265,37 +243,12 @@ The code is packaged as an `application` with the `tld.domain.infra.Main` as a m
 `pulumi` command detects the presence of Gradle build file and runs
 the application with `gradlew run --console=plain`.
 
-Sample Pulumi code is in the link:domain-infra/src[domain-infra/src] folder;
+Sample Pulumi code is in the link:domain-infra/besom/src[domain-infra/src] folder;
 all of it is contained in one Scala file -
-link:domain-infra/src/main/scala/tld/domain/infra/MainBesom.scala[tld/domain/infra/MainBesom.scala] if using Besom or
-link:domain-infra/src/main/scala/tld/domain/infra/MainPulumi.scala[tld/domain/infra/MainPulumi.scala] if not.
+link:domain-infra/src/main/scala/tld/domain/infra/besom/Main.scala[tld/domain/infra/Main.scala].
 The code uses Pulumi helper classes.
 
-=== Terraform
-
-Sample Terraform files are in the link:domain-infra/terraform[domain-infra/terraform] folder.
-
-No additional setup is needed - just run `terraform` command in that folder.
-
-Looping approach using `for_each` borrowed from a https://blog.gruntwork.io/terraform-tips-tricks-loops-if-statements-and-gotchas-f739bbae55f9[blog post]
-by https://medium.com/@brikis98[Yevgeniy Brikman].
-
-Sample files:
-
-- link:domain-infra/terraform/.gitignore[.gitignore] - do not check the state in
-- link:domain-infra/terraform/main.tf[main.tf] - overall setup
-- link:domain-infra/terraform/project-infra.tf[project-infra.tf] - project and its services
-- link:domain-infra/terraform/sa-terraform.tf[sa-terraform.tf] - service account and its roles
-- link:domain-infra/terraform/group-gcp-organization-admins.tf[group-gcp-organization-admins.tf] - administrators group and its roles
-- link:domain-infra/terraform/user-admin.tf[user-admin.tf] - administrator
-- link:domain-infra/terraform/bucket-state.domain.tld.tf[bucket-state.domain.tld.tf] - bucket to store state
-
-In `main.tf`, we specify the Google Cloud Storage bucket to use to store Terraform state -
-until the state migrates into the bucket, those lines need to be commented out.
-
 == Initialize, Import and Migrate State
-
-=== Pulumi
 
 Now we are ready to initialize Pulumi:
 [source,shell]
@@ -306,7 +259,6 @@ $ pulumi config set gcp:project domain-infra
 ----
 
 Now, we import existing resources:
-TODO any differences between Besom and Pulumi?
 [source,shell]
 ----
 # project
@@ -326,7 +278,7 @@ $ pulumi import "gcp:projects/service:Service" \
   "project:domain-infra/service:serviceusage" "domain-infra/serviceusage.googleapis.com"
 
 # service account
-$ pulumi import "gcp:serviceAccount/account:Account" "serviceAccount:terraform@domain-infra" "projects/domain-infra/serviceAccounts/terraform@domain-infra.iam.gserviceaccount.com"
+$ pulumi import "gcp:serviceaccount/account:Account" "serviceAccount:terraform@domain-infra" "projects/domain-infra/serviceAccounts/terraform@domain-infra.iam.gserviceaccount.com"
 
 # service account roles
 $ pulumi import "gcp:organizations/iAMMember:IAMMember" \
@@ -363,57 +315,9 @@ $ pulumi stack export --show-secrets --file dev.stack.json
 $ pulumi stack init
 $ pulumi stack import --file dev.stack.json
 
-=== Terraform
-
-Now we are ready to initialize Terraform:
-
-[source,shell]
-$ cd terraform
-$ terraform init
-
-Existing Google Cloud Platform resources can be bulk-exported in Terraform format if desired:
-[source,shell]
-$ gcloud beta resource-config bulk-export --path=entire-tf-output \
-  --organization=org_id --resource-format=terraform
-
-Now, we import existing resources:
-
-[source,shell]
-----
-# project
-$ terraform import google_project.infra "projects/domain-infra"
-
-# service account
-$ terraform import google_service_account.terraform \
-  "projects/domain-infra/serviceAccounts/terraform@domain-infra.iam.gserviceaccount.com"
-
-# if using Workspace provider to manage Google Workspace user(s)
-$ terraform import googleworkspace_user.admin admin@domain.tld
-----
-
-Instead of importing enabled services of the infrastructure project individually like this:
-[source,shell]
-$ terraform import google_project_service.cloudbilling_googleapis_com \
-  domain-infra/cloudbilling.googleapis.com
-
-I rely on the idempotency and just Terraform the whole
-map `google_project_service.project["..."]` over;
-as a result, initial `terraform apply` might fail
-and will need to be repeated - depending on the order of modifications.
-The same applies to the service account roles.
-
-Now, the state described by the state is applied:
-[source,shell]
-$ terraform apply
-
-Now that the state bucket exists, we migrate the state into it:
-
-In `main.tf`, uncomment `backend "gcs" {...}`.
-Then, move the state to the bucket (see https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/data-sources/remote_state[documentation]):
-[source,shell]
-$ terraform init -migrate-state
-
 == Domains
+
+TODO update
 
 Domains can be imported from Google Domains into Cloud Domains
 by the owner of the domains (not by the Terraform Service Account).
@@ -443,7 +347,7 @@ $ gcloud domains registrations import domain.tld
 $ gcloud domains registrations configure dns domain.tld \
   --cloud-dns-zone=domain-tld
 
-# TODO import a zone into Terraform:
+# import a zone into Terraform:
 $ terraform import google_dns_managed_zone.domain_tld \
   projects/domain-infra/managedZones/domain-tld
 
@@ -584,7 +488,7 @@ $ gcloud identity groups search --customer=... \
   --labels="cloudidentity.googleapis.com/groups.discussion_forum"
 $ gcloud identity groups describe postmaster@domain.tld
 
-Attempt to add user to such group:
+Attempt to add user to such a group:
 
 - fails in Terraform
 - fails in https://console.cloud.google.com/iam-admin/groups[Google Cloud Console] with `permission denied`
@@ -592,62 +496,6 @@ Attempt to add user to such group:
 
 I can make a group for this purpose (not `postmaster` nor `abuse`; say, `catch-all`)
 and configure it as a catch-all mailbox, but I need to configure this group to accept email from outside the organization, and that requires changing a default setting for the Groups application in the Admin Console...
-
-== Failure to bootstrap for Google Workspace
-To remove one more UI-based step,
-I tried to use Terraform to assign
-_GROUPS_ADMIN_ROLE and _USER_MANAGEMENT_ADMIN_ROLE roles
-to the Terraform Service Account;
-even if it worked, it is probably easier to use the Admin Console - but it didn't work:
-
-[source,shell]
-----
-$ gcloud auth application-default login \
-  --scopes "https://www.googleapis.com/auth/admin.directory.rolemanagement"
-----
-results in:
-[source,text]
-----
-This app is blocked
-This app tried to access sensitive info in your Google Account.
-To keep your account safe, Google blocked this access.
-----
-and `terraform apply` (with all the scopes enabled in the Google Workspace provider!) of
-[source,terraform]
-----
-data "googleworkspace_role" "groups-admin" {
-  name = "_GROUPS_ADMIN_ROLE"
-}
-resource "googleworkspace_role_assignment" "terraform-groups-admin" {
-  role_id     = data.googleworkspace_role.groups-admin.id
-  assigned_to = google_service_account.terraform.unique_id
-  scope_type  = "CUSTOMER"
-}
-data "googleworkspace_role" "user-management-admin" {
-  name = "_USER_MANAGEMENT_ADMIN_ROLE"
-}
-resource "googleworkspace_role_assignment" "terraform-user-management-admin" {
-  role_id     = data.googleworkspace_role.user-management-admin.id
-  assigned_to = google_service_account.terraform.unique_id
-  scope_type  = "CUSTOMER"
-}
-----
-results in:
-[source,text]
-----
-Error: googleapi: Error 403: Request had insufficient authentication scopes.
-Details:
-[{
-  "@type": "type.googleapis.com/google.rpc.ErrorInfo",
-  "domain": "googleapis.com",
-  "metadata": {
-    "method": "ccc.hosted.frontend.directory.v1.DirectoryRoles.List",
-    "service": "admin.googleapis.com"
-  },
-  "reason": "ACCESS_TOKEN_SCOPE_INSUFFICIENT"
-}]
-Insufficient Permission ... in data "googleworkspace_role" "groups-admin"
-----
 
 References:
 

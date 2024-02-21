@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2024-
+- cleanup: no more raw Pulumi, only Besom
+- cleanup: various
+- dep: Besom 0.2.2
+
 ## [0.1.0] - 2024-02-20
 - cleanup: no more Terraform
 - cleanup: Builder is more explicit

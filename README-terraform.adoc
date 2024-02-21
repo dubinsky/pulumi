@@ -1,0 +1,151 @@
+== Google Workspace
+
+Unlike Pulumi, Terraform has a Google Workspace provider, which can be used
+to manage:
+- creation and deletion of workspace users
+- settings for workspace users
+- group settings and _aliases_
+
+If using Google Workspace Terraform provider to manage users and groups,
+assign "User Management Admin" and "Group Admin" roles to
+the Terraform service account `terraform@domain-infra.iam.gserviceaccount.com`
+in https://admin.google.com/ac/roles[Admin Console].
+
+In the sample Terraform files, fragments that rely on the Google Workspace provider
+are commented out and marked with `using Workspace provider`.
+
+== Command Line Tools
+
+`Terraform` - from https://learn.hashicorp.com/tutorials/terraform/install-cli[hashicorp.com] (or `google-cloud-cli-terraform-tools`).
+
+== Setup
+
+Sample Terraform files are in the link:domain-infra/terraform[domain-infra/terraform] folder.
+
+No additional setup is needed - just run `terraform` command in that folder.
+
+Looping approach using `for_each` borrowed from a https://blog.gruntwork.io/terraform-tips-tricks-loops-if-statements-and-gotchas-f739bbae55f9[blog post]
+by https://medium.com/@brikis98[Yevgeniy Brikman].
+
+Sample files:
+
+- link:domain-infra/terraform/terraform/.gitignore[.gitignore] - do not check the state in
+- link:domain-infra/terraform/terraform/main.tf[main.tf] - overall setup
+- link:domain-infra/terraform/terraform/project-infra.tf[project-infra.tf] - project and its services
+- link:domain-infra/terraform/terraform/sa-terraform.tf[sa-terraform.tf] - service account and its roles
+- link:domain-infra/terraform/terraform/group-gcp-organization-admins.tf[group-gcp-organization-admins.tf] - administrators group and its roles
+- link:domain-infra/terraform/terraform/user-admin.tf[user-admin.tf] - administrator
+- link:domain-infra/terraform/terraform/bucket-state.domain.tld.tf[bucket-state.domain.tld.tf] - bucket to store state
+
+In `main.tf`, we specify the Google Cloud Storage bucket to use to store Terraform state -
+until the state migrates into the bucket, those lines need to be commented out.
+
+On a local machine, we use `.envrc` file in the project repository
+that `direnv` processes to set the appropriate environment variables;
+see link:domain-infra/terraform/.envrc[.envrc].
+
+== Initialize, Import and Migrate State
+
+Now we are ready to initialize Terraform:
+
+[source,shell]
+$ cd terraform
+$ terraform init
+
+Existing Google Cloud Platform resources can be bulk-exported in Terraform format if desired:
+[source,shell]
+$ gcloud beta resource-config bulk-export --path=entire-tf-output \
+  --organization=org_id --resource-format=terraform
+
+Now, we import existing resources:
+
+[source,shell]
+----
+# project
+$ terraform import google_project.infra "projects/domain-infra"
+
+# service account
+$ terraform import google_service_account.terraform \
+  "projects/domain-infra/serviceAccounts/terraform@domain-infra.iam.gserviceaccount.com"
+
+# if using Workspace provider to manage Google Workspace user(s)
+$ terraform import googleworkspace_user.admin admin@domain.tld
+----
+
+Instead of importing enabled services of the infrastructure project individually like this:
+[source,shell]
+$ terraform import google_project_service.cloudbilling_googleapis_com \
+  domain-infra/cloudbilling.googleapis.com
+
+I rely on the idempotency and just Terraform the whole
+map `google_project_service.project["..."]` over;
+as a result, initial `terraform apply` might fail
+and will need to be repeated - depending on the order of modifications.
+The same applies to the service account roles.
+
+Now, the state described by the state is applied:
+[source,shell]
+$ terraform apply
+
+Now that the state bucket exists, we migrate the state into it:
+
+In `main.tf`, uncomment `backend "gcs" {...}`.
+Then, move the state to the bucket (see https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/data-sources/remote_state[documentation]):
+[source,shell]
+$ terraform init -migrate-state
+
+== Failure to bootstrap for Google Workspace
+To remove one more UI-based step,
+I tried to use Terraform to assign
+_GROUPS_ADMIN_ROLE and _USER_MANAGEMENT_ADMIN_ROLE roles
+to the Terraform Service Account;
+even if it worked, it is probably easier to use the Admin Console - but it didn't work:
+
+[source,shell]
+----
+$ gcloud auth application-default login \
+  --scopes "https://www.googleapis.com/auth/admin.directory.rolemanagement"
+----
+results in:
+[source,text]
+----
+This app is blocked
+This app tried to access sensitive info in your Google Account.
+To keep your account safe, Google blocked this access.
+----
+and `terraform apply` (with all the scopes enabled in the Google Workspace provider!) of
+[source,terraform]
+----
+data "googleworkspace_role" "groups-admin" {
+  name = "_GROUPS_ADMIN_ROLE"
+}
+resource "googleworkspace_role_assignment" "terraform-groups-admin" {
+  role_id     = data.googleworkspace_role.groups-admin.id
+  assigned_to = google_service_account.terraform.unique_id
+  scope_type  = "CUSTOMER"
+}
+data "googleworkspace_role" "user-management-admin" {
+  name = "_USER_MANAGEMENT_ADMIN_ROLE"
+}
+resource "googleworkspace_role_assignment" "terraform-user-management-admin" {
+  role_id     = data.googleworkspace_role.user-management-admin.id
+  assigned_to = google_service_account.terraform.unique_id
+  scope_type  = "CUSTOMER"
+}
+----
+results in:
+[source,text]
+----
+Error: googleapi: Error 403: Request had insufficient authentication scopes.
+Details:
+[{
+  "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+  "domain": "googleapis.com",
+  "metadata": {
+    "method": "ccc.hosted.frontend.directory.v1.DirectoryRoles.List",
+    "service": "admin.googleapis.com"
+  },
+  "reason": "ACCESS_TOKEN_SCOPE_INSUFFICIENT"
+}]
+Insufficient Permission ... in data "googleworkspace_role" "groups-admin"
+----
