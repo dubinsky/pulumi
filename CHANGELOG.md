@@ -6,10 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.0] - 2024-
+## [0.2.0] - 2024-07-03
 - cleanup: no more raw Pulumi, only Besom
 - cleanup: various
-- dep: Besom 0.2.2
+- dep: Besom 0.3.2
+- dep: Besom GCP 3:7.26.0-core.0.3
+- update: Gradle 8.9-rc-1
 
 ## [0.1.0] - 2024-02-20
 - cleanup: no more Terraform
