@@ -16,7 +16,7 @@ final String orgName = 'Podval Group'
 final String orgUrl = 'https://www.podval.org'
 
 dependencies {
-  implementation 'org.scala-lang:scala3-library_3:3.4.2'
+  implementation 'org.scala-lang:scala3-library_3:3.6.2'
 
   // TODO? scalaCompilerPlugins "org.virtuslab:besom-compiler-plugin_3:0.3.2"
   compileOnly 'org.virtuslab:besom-core_3:0.3.2'
