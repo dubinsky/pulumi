@@ -1,26 +1,40 @@
 plugins {
-  id 'com.github.ben-manes.versions' version '0.44.0'
+  id 'com.github.ben-manes.versions' version '0.52.0'
   id 'scala'
   id 'java-library'
   id 'maven-publish'
   id 'signing'
+  id 'com.gradleup.nmcp.aggregation' version '1.0.1'
 }
 
 description = 'Pulumi tooling'
 group = 'org.podval.tools'
-version = '0.2.0'
+version = '0.3.0'
 
 final String gitHubRepository = "dubinsky/pulumi"
 final String gitHubRepositoryUrl = "https://github.com/$gitHubRepository"
 final String orgName = 'Podval Group'
 final String orgUrl = 'https://www.podval.org'
 
-dependencies {
-  implementation 'org.scala-lang:scala3-library_3:3.6.2'
+scala.scalaVersion = '3.7.1'
 
-  // TODO? scalaCompilerPlugins "org.virtuslab:besom-compiler-plugin_3:0.3.2"
-  compileOnly 'org.virtuslab:besom-core_3:0.3.2'
-  compileOnly 'org.virtuslab:besom-gcp_3:7.26.0-core.0.3'
+dependencies {
+  // TODO? scalaCompilerPlugins "org.virtuslab:besom-compiler-plugin_3:0.4.0"
+  compileOnly 'org.virtuslab:besom-core_3:0.4.0'
+  compileOnly 'org.virtuslab:besom-gcp_3:8.22.0-core.0.4'
+}
+
+def isNonStable = { String version ->
+  boolean stableKeyword = ['RELEASE', 'FINAL', 'GA'].any { it -> version.toUpperCase().contains(it) }
+  String regex = /^[0-9,.v-]+(-r)?$/
+  return !stableKeyword && !(version ==~ regex)
+}
+
+// dependencyUpdates.revision = 'release'
+tasks.named("dependencyUpdates").configure {
+  rejectVersionIf {
+    isNonStable(it.candidate.version)
+  }
 }
 
 tasks.withType(ScalaCompile).configureEach {
@@ -46,12 +60,12 @@ jar {
 
 tasks.register('sourcesJar', Jar) {
   from sourceSets.main.allSource
-  archiveClassifier.set('sources')
+  archiveClassifier = 'sources'
 }
 
 tasks.register('scaladocJar', Jar) {
   from scaladoc.destinationDir
-  archiveClassifier.set('scaladoc')
+  archiveClassifier = 'scaladoc'
 }
 scaladocJar.dependsOn scaladoc
 
@@ -60,23 +74,25 @@ project.gradle.startParameter.excludedTaskNames.add('compileJava')
 // but Maven Central requires javadoc JAR...
 tasks.register('javadocJar', Jar) {
   from javadoc.destinationDir
-  archiveClassifier.set('javadoc')
+  archiveClassifier = 'javadoc'
 }
 javadocJar.dependsOn(javadoc)
 
-publishing {
-  repositories {
-    maven {
-      name = 'mavenCentral'
-      url = version.endsWith('SNAPSHOT') ?
-        'https://oss.sonatype.org/content/repositories/snapshots' :
-        'https://oss.sonatype.org/service/local/staging/deploy/maven2'
+// ./gradlew nmcpZipAggregation - to see what will be published
+// ./gradlew publishAggregationToCentralPortal - to publish
+// https://central.sonatype.com/ - to release
+nmcpAggregation {
+  // Publish all projects that apply the 'maven-publish' plugin
+  publishAllProjectsProbablyBreakingProjectIsolation()
 
-      // Note: this will use mavenCentralUsername and mavenCentralPassword properties - if they are available
-      credentials(PasswordCredentials)
-    }
+  centralPortal {
+    publishingType = "USER_MANAGED"
+    username = findProperty('mavenCentralUsername') as String
+    password = findProperty('mavenCentralPassword') as String
   }
+}
 
+publishing {
   publications {
     library(MavenPublication) {
       from components.java
@@ -130,6 +146,6 @@ signing {
 }
 
 tasks.register('upload')
-upload.description('Upload artifacts')
-upload.group('publishing')
-upload.dependsOn(publishLibraryPublicationToMavenCentralRepository)
+upload.description = 'Upload artifacts'
+upload.group = 'publishing'
+upload.dependsOn(publishAggregationToCentralPortal)

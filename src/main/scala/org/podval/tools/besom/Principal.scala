@@ -15,19 +15,19 @@ object Principal:
   // A special identifier that represents anyone who is on the internet; with or without a Google account.
   object AllUsers
 
-  given Principal[AllUsers.type] with
+  given Principal[AllUsers.type]:
     extension(allUsers: Output[AllUsers.type])(using ctx: Context)
       override def principalResourceName: Output[String] = Output("allUsers")
 
   // A special identifier that represents anyone who is authenticated with a Google account or a service account.
   object AllAuthenticatedUsers
 
-  given Principal[AllAuthenticatedUsers.type] with
+  given Principal[AllAuthenticatedUsers.type]:
     extension (allUsers: Output[AllAuthenticatedUsers.type])(using ctx: Context)
       override def principalResourceName: Output[String] = Output("allAuthenticatedUsers")
       
   // user:{emailid}: An email address that represents a specific Google account.    
-  given Principal[User] with
+  given Principal[User]:
     extension (user: Output[User])(using ctx: Context)
       override def principalResourceName: Output[String] = user.map(_.resourceName)
 
@@ -39,7 +39,7 @@ object Principal:
   given ResourcePrincipal[Group] = new ResourcePrincipal[Group]{}
 
   // serviceAccount:{emailid}: An email address that represents a service account
-  given ResourcePrincipal[Account] with
+  given ResourcePrincipal[Account]:
     extension(serviceAccount: Output[Account])(using ctx: Context)
       override def principalMember: Output[String] = serviceAccount.member
 
