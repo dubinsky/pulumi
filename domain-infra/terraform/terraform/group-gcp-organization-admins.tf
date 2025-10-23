@@ -10,7 +10,6 @@ resource "google_organization_iam_member" "organization-admins" {
   for_each = toset([
     "billing.admin",
     "cloudasset.owner",
-    "domains.admin",
     "iam.organizationRoleViewer",
     "iam.serviceAccountAdmin",
     "iam.serviceAccountKeyAdmin",

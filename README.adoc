@@ -49,7 +49,6 @@ and I _do_ miss this functionality.
 
 There is a number of UI 'consoles' that are used to manage the configuration:
 
-- https://domains.google.com[Google Domains]
 - https://admin.google.com/[Admin Console]
 - https://console.cloud.google.com[Google Cloud Console]
 - https://groups.google.com/[Google Groups]
@@ -83,10 +82,6 @@ In the following and in the sample files,
 - `admin@domain.tld` is the super-admin of the domain
 
 == Preparations
-
-In https://domains.google.com[Google Domains]:
-
-- transfer Workspace subscription from Google Domains to Google Workspace
 
 In https://console.cloud.google.com[Google Cloud Console]:
 
@@ -202,7 +197,7 @@ In GitHub Actions, environment variables are set from secrets.
 To be able to work with subdomain-like Google Storage Buckets like `state.domain.tld`,
 service account `terraform@domain-infra.iam.gserviceaccount.com` has to be added to the owners of the `domain.tld` in Google Search Central at
 https://www.google.com/webmasters/verification/details?hl=en&domain=domain.tld.
-This is required even with the domain in Google Cloud Domains.
+
 To be able to do this, one needs to first add the property in the
 https://search.google.com/search-console[Google Search Console] - which is not a bad idea regardless,
 and is also needed to later create organization, account and properties in the
@@ -314,50 +309,6 @@ $ pulumi stack export --show-secrets --file dev.stack.json
 [source,shell]
 $ pulumi stack init
 $ pulumi stack import --file dev.stack.json
-
-== Domains
-
-TODO update
-
-Domains can be imported from Google Domains into Cloud Domains
-by the owner of the domains (not by the Terraform Service Account).
-Prices in Cloud Domains are the same as in Google Domains.
-Domains can be exported out of the Cloud Domains.
-
-Once imported, domain disappears from Google Domains' list,
-but is visible at `https://domains.google.com/registrar?d=domain.tld`,
-and https://support.google.com/domains/answer/12299086?hl=en[can be added back] by clicking "Add Project".
-
-Website forwarding can still be setup in the Google Domains UI even if the domain is managed by Google Cloud Domains.
-
-Google Terraform provider https://github.com/hashicorp/terraform-provider-google/issues/7696[does not support Cloud Domains] -
-but it does support management of the DNS records for the domains configured to use Google Cloud DNS.
-For each such domain a zone must be Terraformed and then associated with the domain.
-I do not see enough benefits in using Cloud DNS.
-
-Google Domains goes away at the end of 2023, and all the domains from Cloud Domains go with it,
-so I am not sure if it makes sense to move the domains from Google Domains to Cloud Domains either - but I think I'll do it just in case, and once the domains move, I'll look into the benefits of managing DNS as code again.
-
-[source,shell]
-----
-$ gcloud auth login admin@domain.tld
-$ gcloud domains registrations list-importable-domains
-$ gcloud domains registrations import domain.tld
-# assuming zones are terraformed:
-$ gcloud domains registrations configure dns domain.tld \
-  --cloud-dns-zone=domain-tld
-
-# import a zone into Terraform:
-$ terraform import google_dns_managed_zone.domain_tld \
-  projects/domain-infra/managedZones/domain-tld
-
-# disable DNSSEC
-$ gcloud domains registrations configure dns domain.tld \
-  --disable-dnssec
-# switch back from Google Cloud DNF to Google Domains
-$ gcloud domains registrations configure dns domain.tld \
-  --use-google-domains-dns
-----
 
 == GCP Provider Upgrade - Pulumi/Besom
 
@@ -497,7 +448,25 @@ Attempt to add user to such a group:
 I can make a group for this purpose (not `postmaster` nor `abuse`; say, `catch-all`)
 and configure it as a catch-all mailbox, but I need to configure this group to accept email from outside the organization, and that requires changing a default setting for the Groups application in the Admin Console...
 
-References:
+== Domains
+
+I use CloudFlare for domain registration and DNS.
+
+To automate domain configuration, a CloudFlare Account API token is needed,
+with the following `Edit` permissions (for all zones in the account):
+- `Zone.Zone` ;
+- `Zone.Dns`;
+- `Zone.Single Redirect` (so far, I did not use redirects that require thios one).
+
+File with the token goes into the same directory where GCP key resides;
+`.envrc` assigns its content to an environment variable
+`CLOUDFLARE_API_TOKEN`,
+from where it gets picked up by the Pulumi CloudFlare provider.
+
+To find out CoudFlare account id is, copy it using the
+three dots menu in the CloudFlare account home.
+
+== References
 
 - https://admin.google.com/ac/owl/domainwidedelegation[domain-wide delegation]
 - https://support.google.com/a/answer/2405986?product_name=UnuFlow&visit_id=637986396850085932-3642428519&rd=1&src=supportwidget0[Pre-built administrator roles]

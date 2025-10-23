@@ -26,8 +26,6 @@ object MainBesom:
   private val terraformServiceAccountOrganizationRoles: Seq[String] = Seq(
     "billing.admin",
     "compute.admin",
-    "dns.admin",
-    "domains.admin",
     "iam.organizationRoleAdmin",
     "iam.serviceAccountAdmin",
     "managedidentities.admin",
@@ -41,7 +39,6 @@ object MainBesom:
   private val organizationAdminsGroupOrganizationRoles: Seq[String] = Seq(
     "billing.admin",
     "cloudasset.owner",
-    "domains.admin",
     "iam.organizationRoleViewer",
     "iam.serviceAccountAdmin",
     "iam.serviceAccountKeyAdmin",

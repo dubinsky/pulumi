@@ -1,27 +1,28 @@
 plugins {
-  id 'com.github.ben-manes.versions' version '0.52.0'
+  id 'com.github.ben-manes.versions' version '0.53.0'
   id 'scala'
   id 'java-library'
   id 'maven-publish'
   id 'signing'
-  id 'com.gradleup.nmcp.aggregation' version '1.0.1'
+  id 'com.gradleup.nmcp.aggregation' version '1.2.0'
 }
 
 description = 'Pulumi tooling'
 group = 'org.podval.tools'
-version = '0.3.0'
+version = '0.4.0'
 
 final String gitHubRepository = "dubinsky/pulumi"
 final String gitHubRepositoryUrl = "https://github.com/$gitHubRepository"
 final String orgName = 'Podval Group'
 final String orgUrl = 'https://www.podval.org'
 
-scala.scalaVersion = '3.7.1'
+scala.scalaVersion = '3.7.3'
 
 dependencies {
   // TODO? scalaCompilerPlugins "org.virtuslab:besom-compiler-plugin_3:0.4.0"
-  compileOnly 'org.virtuslab:besom-core_3:0.4.0'
-  compileOnly 'org.virtuslab:besom-gcp_3:8.22.0-core.0.4'
+  compileOnly 'org.virtuslab:besom-core_3:0.5.0'
+  compileOnly 'org.virtuslab:besom-gcp_3:9.0.0-core.0.5'
+  compileOnly 'org.virtuslab:besom-cloudflare_3:6.9.1-core.0.5'
 }
 
 def isNonStable = { String version ->
@@ -80,7 +81,7 @@ javadocJar.dependsOn(javadoc)
 
 // ./gradlew nmcpZipAggregation - to see what will be published
 // ./gradlew publishAggregationToCentralPortal - to publish
-// https://central.sonatype.com/ - to release
+// https://central.sonatype.com/publishing/deployments - to release
 nmcpAggregation {
   // Publish all projects that apply the 'maven-publish' plugin
   publishAllProjectsProbablyBreakingProjectIsolation()

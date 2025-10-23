@@ -12,8 +12,6 @@ resource "google_organization_iam_member" "terraform" {
   for_each = toset([
     "billing.admin",
     "compute.admin",
-    "dns.admin",
-    "domains.admin",
     "iam.organizationRoleAdmin",
     "iam.serviceAccountAdmin",
     "managedidentities.admin",
