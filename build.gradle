@@ -11,12 +11,9 @@ description = 'Pulumi tooling'
 group = 'org.podval.tools'
 version = '0.4.0'
 
-final String gitHubRepository = "dubinsky/pulumi"
-final String gitHubRepositoryUrl = "https://github.com/$gitHubRepository"
-final String orgName = 'Podval Group'
-final String orgUrl = 'https://www.podval.org'
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
-scala.scalaVersion = '3.7.3'
+scala.scalaVersion = '3.7.4'
 
 dependencies {
   // TODO? scalaCompilerPlugins "org.virtuslab:besom-compiler-plugin_3:0.4.0"
@@ -49,6 +46,11 @@ tasks.withType(ScalaCompile).configureEach {
     ]
   }
 }
+
+final String gitHubRepository = "dubinsky/pulumi"
+final String gitHubRepositoryUrl = "https://github.com/$gitHubRepository"
+final String orgName = 'Podval Group'
+final String orgUrl = 'https://www.podval.org'
 
 jar {
   manifest {
@@ -140,8 +142,8 @@ publishing {
 
 signing {
   useInMemoryPgpKeys(
-    findProperty('gnupg.dub-podval-org.key') as String,
-    findProperty('gnupg.dub-podval-org.password') as String
+    findProperty('signingKey') as String,
+    findProperty('signingPassword') as String
   )
   sign publishing.publications.library
 }
