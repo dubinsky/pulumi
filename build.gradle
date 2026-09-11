@@ -1,25 +1,51 @@
 plugins {
-  id 'com.github.ben-manes.versions' version '0.53.0'
-  id 'scala'
   id 'java-library'
+  id 'scala'
   id 'maven-publish'
   id 'signing'
-  id 'com.gradleup.nmcp.aggregation' version '1.2.0'
+  id 'io.github.ben-manes.versions' version '0.61.0'
 }
 
 description = 'Pulumi tooling'
 group = 'org.podval.tools'
-version = '0.4.0'
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+final String gitHubRepository = 'dubinsky/pulumi'
+final String gitHubRepositoryUrl = "https://github.com/$gitHubRepository"
+final String orgName = 'Podval Group'
+final String orgUrl = 'https://www.podval.org'
 
-scala.scalaVersion = '3.7.4'
+scala.scalaVersion = providers.gradleProperty('scalaVersion').get()
+
+// Register before `withJavadocJar()` so that call reuses this task (it will not
+// overwrite `from`). Maven Central requires a -javadoc jar; this project is
+// Scala-only, so the classifier carries ScalaDoc.
+tasks.register('javadocJar', Jar) {
+  group = 'build'
+  description = 'Assembles a jar archive containing the ScalaDoc (Maven Central -javadoc classifier).'
+  from scaladoc
+  archiveClassifier = 'javadoc'
+}
+
+java {
+  toolchain.languageVersion = JavaLanguageVersion.of(25)
+  withSourcesJar()
+  withJavadocJar()
+}
+
+tasks.named('jar', Jar) {
+  manifest {
+    attributes(
+      'Implementation-Title'  : project.name,
+      'Implementation-Version': archiveVersion,
+      'Implementation-Vendor' : orgName
+    )
+  }
+}
 
 dependencies {
-  // TODO? scalaCompilerPlugins "org.virtuslab:besom-compiler-plugin_3:0.4.0"
-  compileOnly 'org.virtuslab:besom-core_3:0.5.0'
+  compileOnly 'org.virtuslab:besom-core_3:0.5.1'
   compileOnly 'org.virtuslab:besom-gcp_3:9.0.0-core.0.5'
-  compileOnly 'org.virtuslab:besom-cloudflare_3:6.9.1-core.0.5'
+  compileOnly 'org.virtuslab:besom-cloudflare_3:6.20.0-core.0.5'
 }
 
 def isNonStable = { String version ->
@@ -28,7 +54,6 @@ def isNonStable = { String version ->
   return !stableKeyword && !(version ==~ regex)
 }
 
-// dependencyUpdates.revision = 'release'
 tasks.named("dependencyUpdates").configure {
   rejectVersionIf {
     isNonStable(it.candidate.version)
@@ -37,8 +62,9 @@ tasks.named("dependencyUpdates").configure {
 
 tasks.withType(ScalaCompile).configureEach {
   scalaCompileOptions.with {
-    targetCompatibility = '' // TODO remove when https://youtrack.jetbrains.com/issue/SCL-18813 is fixed
     additionalParameters = [
+      // Scala 3.9 requires JDK 17+; emit 25 to match the Java toolchain.
+      '-release:25',
       '-new-syntax',
       '-feature',
       '-language:strictEquality',
@@ -47,77 +73,33 @@ tasks.withType(ScalaCompile).configureEach {
   }
 }
 
-final String gitHubRepository = "dubinsky/pulumi"
-final String gitHubRepositoryUrl = "https://github.com/$gitHubRepository"
-final String orgName = 'Podval Group'
-final String orgUrl = 'https://www.podval.org'
-
-jar {
-  manifest {
-    attributes(
-      'Implementation-Title'  : project.description,
-      'Implementation-Version': project.version
-    )
-  }
-}
-
-tasks.register('sourcesJar', Jar) {
-  from sourceSets.main.allSource
-  archiveClassifier = 'sources'
-}
-
-tasks.register('scaladocJar', Jar) {
-  from scaladoc.destinationDir
-  archiveClassifier = 'scaladoc'
-}
-scaladocJar.dependsOn scaladoc
-
-// There is no Java in the project :)
-project.gradle.startParameter.excludedTaskNames.add('compileJava')
-// but Maven Central requires javadoc JAR...
-tasks.register('javadocJar', Jar) {
-  from javadoc.destinationDir
-  archiveClassifier = 'javadoc'
-}
-javadocJar.dependsOn(javadoc)
-
-// ./gradlew nmcpZipAggregation - to see what will be published
-// ./gradlew publishAggregationToCentralPortal - to publish
-// https://central.sonatype.com/publishing/deployments - to release
-nmcpAggregation {
-  // Publish all projects that apply the 'maven-publish' plugin
-  publishAllProjectsProbablyBreakingProjectIsolation()
-
-  centralPortal {
-    publishingType = "USER_MANAGED"
-    username = findProperty('mavenCentralUsername') as String
-    password = findProperty('mavenCentralPassword') as String
-  }
-}
-
 publishing {
   publications {
     library(MavenPublication) {
       from components.java
-      artifact sourcesJar
-      artifact scaladocJar
-      artifact javadocJar
 
       pom {
-        name = project.name
+        name = 'Podval Pulumi'
         description = project.description
         url = gitHubRepositoryUrl
+        inceptionYear = '2023'
         scm {
           url = gitHubRepositoryUrl
-          connection = "scm:git:git://github.com/${gitHubRepository}.git"
-          developerConnection = "scm:git:ssh://github.com/${gitHubRepository}.git"
+          connection = "scm:git:https://github.com/${gitHubRepository}.git"
+          developerConnection = "scm:git:ssh://git@github.com/${gitHubRepository}.git"
+        }
+        issueManagement {
+          system = 'GitHub'
+          url = "$gitHubRepositoryUrl/issues"
+        }
+        ciManagement {
+          system = 'GitHub Actions'
+          url = "$gitHubRepositoryUrl/actions"
         }
         licenses {
           license {
-            name = 'The Apache Software License, Version 2.0'
+            name = 'Apache-2.0'
             url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
-            distribution = 'repo'
-            comments = 'A business-friendly OSS license'
           }
         }
         organization {
@@ -141,14 +123,9 @@ publishing {
 }
 
 signing {
-  useInMemoryPgpKeys(
-    findProperty('signingKey') as String,
-    findProperty('signingPassword') as String
-  )
+  def key = providers.gradleProperty('signingKey')
+  def password = providers.gradleProperty('signingPassword')
+  required = key.isPresent()
+  useInMemoryPgpKeys(key.getOrNull(), password.getOrNull())
   sign publishing.publications.library
 }
-
-tasks.register('upload')
-upload.description = 'Upload artifacts'
-upload.group = 'publishing'
-upload.dependsOn(publishAggregationToCentralPortal)

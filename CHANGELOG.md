@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-11
+- Gradle: match `xml` (JDK 25, Scala 3.9, foojay, nmcp 1.6.2 in settings, versions 0.61.0, configuration cache).
+- dep: Besom 0.5.1, GCP 9.0.0-core.0.5, Cloudflare 6.20.0-core.0.5.
+- feat: `DnsZone` `proxied` (orange-cloud apex and `www`) and `alwaysUseHttps` (zone setting).
+
 ## [0.2.0] - 2024-07-03
 - cleanup: no more raw Pulumi, only Besom
 - cleanup: various

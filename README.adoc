@@ -455,6 +455,7 @@ I use CloudFlare for domain registration and DNS.
 To automate domain configuration, a CloudFlare Account API token is needed,
 with the following `Edit` permissions (for all zones in the account):
 - `Zone.Zone` ;
+- `Zone.Zone Settings` (Always Use HTTPS);
 - `Zone.Dns`;
 - `Zone.Single Redirect` (so far, I did not use redirects that require thios one).
 

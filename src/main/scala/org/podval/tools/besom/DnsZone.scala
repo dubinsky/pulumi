@@ -1,8 +1,9 @@
 package org.podval.tools.besom
 
 import besom.{Context, Output}
-import besom.api.cloudflare.{DnsRecord, DnsRecordArgs, Zone, ZoneArgs}
+import besom.api.cloudflare.{DnsRecord, DnsRecordArgs, Zone, ZoneArgs, ZoneSetting, ZoneSettingArgs}
 import besom.api.cloudflare.inputs.ZoneAccountArgs
+import besom.json.JsString
 import besom.types.ResourceId
 
 object DnsZone:
@@ -13,7 +14,11 @@ open class DnsZone(
   domain: String,
   www: String,
   cnames: Seq[(String, String)] = Seq.empty,
-  dkim: Option[String] = None
+  dkim: Option[String] = None,
+  /** Orange-cloud apex (`@`) and `www`. Extra `cnames` stay DNS-only. */
+  proxied: Boolean = false,
+  /** Zone setting Always Use HTTPS. Only affects orange-clouded names; set with `proxied`. */
+  alwaysUseHttps: Boolean = false
 )(using ctx: Context, cloudFlare: CloudFlare) extends WithResources:
 
   // pulumi import cloudflare:index/zone:Zone zone:<zone name> <zone id>
@@ -56,11 +61,26 @@ open class DnsZone(
     //AAAA 2001:4860:4802:36::15
     //AAAA 2001:4860:4802:32::15
 
-    val cnames: Seq[Output[DnsRecord]] =
-      for (name, target) <- this.cnames ++ Seq("@" -> s"www.$domain", "www" -> www) yield record("CNAME", name, target)
-    
-    Seq(zone) ++
-    cnames ++
+    val extraCnames: Seq[Output[DnsRecord]] =
+      for (name, target) <- this.cnames yield record("CNAME", name, target)
+
+    val apexAndWww: Seq[Output[DnsRecord]] = Seq(
+      record("CNAME", "@", s"www.$domain", proxied = proxied),
+      record("CNAME", "www", www, proxied = proxied)
+    )
+
+    val alwaysHttps: Output[ZoneSetting] = ZoneSetting(
+      name = s"zoneSetting:$domain:always_use_https",
+      args = ZoneSettingArgs(
+        zoneId = zoneId,
+        settingId = "always_use_https",
+        value = JsString(if alwaysUseHttps then "on" else "off")
+      )
+    )
+
+    Seq(zone, alwaysHttps) ++
+    extraCnames ++
+    apexAndWww ++
     mail
 
   private def record(
