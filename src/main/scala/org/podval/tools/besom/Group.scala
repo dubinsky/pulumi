@@ -1,7 +1,7 @@
 package org.podval.tools.besom
 
 import besom.Pulumi.PulumiInterpolationOps
-import besom.{Context, Output}
+import besom.{Context, CustomResourceOptions, Output}
 import besom.api.gcp.cloudidentity.inputs.{GroupGroupKeyArgs, GroupMembershipPreferredMemberKeyArgs, GroupMembershipRoleArgs}
 import besom.api.gcp.cloudidentity.{Group as GroupGCP, GroupArgs, GroupMembership, GroupMembershipArgs}
 
@@ -18,13 +18,18 @@ final class Group(
   // pulumi import "gcp:cloudidentity/groupMembership:GroupMembership" "group:<group email>/user:<email>" "groups/<group id #>/memberships/<user id #>"
   override def resources: Seq[Output[?]] =
     val groupEmail: String = s"$name@${gcp.domain}"
-    val group: Output[GroupGCP] = GroupGCP(s"group:$groupEmail", GroupArgs(
-      displayName = displayName,
-      description = description,
-      groupKey = GroupGroupKeyArgs(id = groupEmail),
-      labels = groupLabels,
-      parent = pulumi"customers/${gcp.directoryCustomerId}"
-    ))
+    val group: Output[GroupGCP] = GroupGCP(
+      s"group:$groupEmail",
+      GroupArgs(
+        displayName = displayName,
+        description = description,
+        groupKey = GroupGroupKeyArgs(id = groupEmail),
+        labels = groupLabels,
+        parent = pulumi"customers/${gcp.directoryCustomerId}"
+      ),
+      // ForceNew in newer GCP provider; was unset in old state. Do not replace existing groups.
+      CustomResourceOptions(ignoreChanges = Seq("initialGroupConfig"))
+    )
 
     Seq(group) ++ WithResources(Seq(
       OrganizationIam(group, organizationRoles)
@@ -41,11 +46,15 @@ final class Group(
   )(using ctx: Context): Output[GroupMembership] =
     for
       groupEmail: String <- group.groupKey.id
-      result: GroupMembership <- GroupMembership(s"group:$groupEmail/${user.resourceName}", GroupMembershipArgs(
-        group = group.id,
-        preferredMemberKey = GroupMembershipPreferredMemberKeyArgs(id = user.email),
-        roles = roles
-      ))
+      result: GroupMembership <- GroupMembership(
+        s"group:$groupEmail/${user.resourceName}",
+        GroupMembershipArgs(
+          group = group.id,
+          preferredMemberKey = GroupMembershipPreferredMemberKeyArgs(id = user.email),
+          roles = roles
+        ),
+        CustomResourceOptions(ignoreChanges = Seq("createIgnoreAlreadyExists"))
+      )
     yield result
 
   private def groupRole(name: String): GroupMembershipRoleArgs = GroupMembershipRoleArgs(name = name)
