@@ -452,19 +452,30 @@ and configure it as a catch-all mailbox, but I need to configure this group to a
 
 I use CloudFlare for domain registration and DNS.
 
-To automate domain configuration, a CloudFlare Account API token is needed,
-with the following `Edit` permissions (for all zones in the account):
-- `Zone.Zone` ;
-- `Zone.Zone Settings` (Always Use HTTPS);
-- `Zone.Dns`;
-- `Zone.Single Redirect` (so far, I did not use redirects that require thios one).
+To automate domain configuration, a CloudFlare **account-owned** API token is needed
+(Manage Account → API Tokens, not My Profile), with `Edit` on all zones in the account:
+
+- `Zone.Zone`
+- `Zone.Zone Settings` (Always Use HTTPS, minimum TLS 1.2)
+- `Zone.DNS` (records, including CAA / TXT / MX, and DNSSEC)
+- `Zone.Single Redirect` (auxiliary domains and Google-hosted apex 301s)
+
+`DnsZone` then manages:
+
+- GitHub Pages: orange-cloud CNAME `@` → `www` → `*.github.io` and Always Use HTTPS
+- Google Sites (`ghs.googlehosted.com`): orange-cloud dummy A on `@`, Single Redirect to `www`, `www` DNS-only
+- Auxiliary (`DnsZone.alias`): dummy A on `@`/`www`, Single Redirect to the canonical host
+- CAA `issue` / `issuewild` for `pki.goog` and `letsencrypt.org` (Universal SSL, Google, GitHub Pages)
+- DNSSEC on (Cloudflare is the registrar, so DS at the registry is automatic)
+- Workspace mail: `smtp.google.com`, SPF, DKIM, DMARC `p=none`
+- Names with no mail: SPF `-all` and DMARC `p=reject`
 
 File with the token goes into the same directory where GCP key resides;
 `.envrc` assigns its content to an environment variable
 `CLOUDFLARE_API_TOKEN`,
 from where it gets picked up by the Pulumi CloudFlare provider.
 
-To find out CoudFlare account id is, copy it using the
+To find out CloudFlare account id, copy it using the
 three dots menu in the CloudFlare account home.
 
 == References
