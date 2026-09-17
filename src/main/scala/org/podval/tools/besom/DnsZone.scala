@@ -63,7 +63,7 @@ open class DnsZone(
       record("TXT", domain, """"v=spf1 include:_spf.google.com ~all""""),
       record("TXT", "google._domainkey", dkim),
       record("MX" , "@", "smtp.google.com", priority = Some(1)),
-      record("TXT", "_dmarc", s""""v=DMARC1; p=none; rua=mailto:dub@$domain"""")
+      record("TXT", "_dmarc", """"v=DMARC1; p=none"""")
     ))
 
     val extraCnames: Seq[Output[DnsRecord]] =
