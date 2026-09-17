@@ -3,129 +3,21 @@ plugins {
   id 'scala'
   id 'maven-publish'
   id 'signing'
-  id 'io.github.ben-manes.versions' version '0.61.0'
+  id 'org.podval.conventions'
+  id 'org.podval.conventions.publish'
 }
 
 description = 'Pulumi tooling'
 group = 'org.podval.tools'
 
-final String gitHubRepository = 'dubinsky/pulumi'
-final String gitHubRepositoryUrl = "https://github.com/$gitHubRepository"
-final String orgName = 'Podval Group'
-final String orgUrl = 'https://www.podval.org'
-
-scala.scalaVersion = providers.gradleProperty('scalaVersion').get()
-
-// Register before `withJavadocJar()` so that call reuses this task (it will not
-// overwrite `from`). Maven Central requires a -javadoc jar; this project is
-// Scala-only, so the classifier carries ScalaDoc.
-tasks.register('javadocJar', Jar) {
-  group = 'build'
-  description = 'Assembles a jar archive containing the ScalaDoc (Maven Central -javadoc classifier).'
-  from scaladoc
-  archiveClassifier = 'javadoc'
-}
-
-java {
-  toolchain.languageVersion = JavaLanguageVersion.of(25)
-  withSourcesJar()
-  withJavadocJar()
-}
-
-tasks.named('jar', Jar) {
-  manifest {
-    attributes(
-      'Implementation-Title'  : project.name,
-      'Implementation-Version': archiveVersion,
-      'Implementation-Vendor' : orgName
-    )
-  }
+podvalPublish {
+  gitHubRepository = 'dubinsky/pulumi'
+  name = 'Podval Pulumi'
+  inceptionYear = '2023'
 }
 
 dependencies {
   compileOnly 'org.virtuslab:besom-core_3:0.5.1'
   compileOnly 'org.virtuslab:besom-gcp_3:9.0.0-core.0.5'
   compileOnly 'org.virtuslab:besom-cloudflare_3:6.20.0-core.0.5'
-}
-
-def isNonStable = { String version ->
-  boolean stableKeyword = ['RELEASE', 'FINAL', 'GA'].any { it -> version.toUpperCase().contains(it) }
-  String regex = /^[0-9,.v-]+(-r)?$/
-  return !stableKeyword && !(version ==~ regex)
-}
-
-tasks.named("dependencyUpdates").configure {
-  rejectVersionIf {
-    isNonStable(it.candidate.version)
-  }
-}
-
-tasks.withType(ScalaCompile).configureEach {
-  scalaCompileOptions.with {
-    additionalParameters = [
-      // Scala 3.9 requires JDK 17+; emit 25 to match the Java toolchain.
-      '-release:25',
-      '-new-syntax',
-      '-feature',
-      '-language:strictEquality',
-      '-source:future'
-    ]
-  }
-}
-
-publishing {
-  publications {
-    library(MavenPublication) {
-      from components.java
-
-      pom {
-        name = 'Podval Pulumi'
-        description = project.description
-        url = gitHubRepositoryUrl
-        inceptionYear = '2023'
-        scm {
-          url = gitHubRepositoryUrl
-          connection = "scm:git:https://github.com/${gitHubRepository}.git"
-          developerConnection = "scm:git:ssh://git@github.com/${gitHubRepository}.git"
-        }
-        issueManagement {
-          system = 'GitHub'
-          url = "$gitHubRepositoryUrl/issues"
-        }
-        ciManagement {
-          system = 'GitHub Actions'
-          url = "$gitHubRepositoryUrl/actions"
-        }
-        licenses {
-          license {
-            name = 'Apache-2.0'
-            url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
-          }
-        }
-        organization {
-          name = orgName
-          url = orgUrl
-        }
-        developers {
-          developer {
-            id = 'dub'
-            name = 'Leonid Dubinsky'
-            email = 'dub@podval.org'
-            url = 'https://dub.podval.org'
-            organization = orgName
-            organizationUrl = orgUrl
-            timezone = '-5'
-          }
-        }
-      }
-    }
-  }
-}
-
-signing {
-  def key = providers.gradleProperty('signingKey')
-  def password = providers.gradleProperty('signingPassword')
-  required = key.isPresent()
-  useInMemoryPgpKeys(key.getOrNull(), password.getOrNull())
-  sign publishing.publications.library
 }
