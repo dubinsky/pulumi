@@ -14,6 +14,9 @@ object DnsZone:
   val GOOGLEHOSTED: String = "ghs.googlehosted.com"
   val BUCKET: String = "c.storage.googleapis.com"
 
+  /** Exact-path 301. `path` is `http.request.uri.path` (no query). `to` is an absolute URL. */
+  final case class PathRedirect(path: String, to: String)
+
   /** Auxiliary domain: orange-cloud dummy A for `@` and `www`, 301 to `https://$canonical`. */
   def alias(
     domain: String,
@@ -31,7 +34,9 @@ open class DnsZone(
   /** Always Use HTTPS. Emitted only when `proxied`, `alwaysUseHttps`, or `alias` is set. */
   alwaysUseHttps: Boolean = false,
   /** Auxiliary zone: do not CNAME to GitHub; redirect `@` and `www` to `www`. */
-  alias: Boolean = false
+  alias: Boolean = false,
+  /** Exact-path 301s, same Single Redirect ruleset as a host redirect (one per phase). */
+  pathRedirects: Seq[DnsZone.PathRedirect] = Seq.empty
 )(using ctx: Context, cloudFlare: CloudFlare) extends WithResources:
 
   // pulumi import cloudflare:index/zone:Zone zone:<zone name> <zone id>
@@ -124,10 +129,21 @@ open class DnsZone(
         ca <- Seq("pki.goog", "letsencrypt.org")
       yield caaRecord(tag, ca)
 
+    val hostRedirect: Option[(RulesetRuleArgs, String)] =
+      if alias then Some(hostRedirectRule(hosts = Seq(domain, s"www.$domain"), to = www))
+      else if googleOrigin then Some(hostRedirectRule(hosts = Seq(domain), to = s"www.$domain"))
+      else None
+
+    val pathRules: Seq[RulesetRuleArgs] = pathRedirects.map(pathRedirectRule)
+    val redirectRules: Seq[RulesetRuleArgs] = pathRules ++ hostRedirect.map(_._1)
     val redirects: Seq[Output[Ruleset]] =
-      if alias then Seq(redirectRuleset(hosts = Seq(domain, s"www.$domain"), to = www))
-      else if googleOrigin then Seq(redirectRuleset(hosts = Seq(domain), to = s"www.$domain"))
-      else Seq.empty
+      if redirectRules.isEmpty then Seq.empty
+      else
+        val description: String =
+          val host: Option[String] = hostRedirect.map(_._2)
+          val paths: Option[String] = Option.when(pathRules.nonEmpty)(s"$domain path redirects")
+          (host.toSeq ++ paths.toSeq).mkString("; ")
+        Seq(redirectRuleset(redirectRules, description))
 
     Seq(zone, minTls, dnssec) ++
     alwaysHttps ++
@@ -137,19 +153,37 @@ open class DnsZone(
     mail ++
     caa
 
-  private def redirectRuleset(hosts: Seq[String], to: String): Output[Ruleset] = Ruleset(
+  private def redirectRuleset(rules: Seq[RulesetRuleArgs], description: String): Output[Ruleset] = Ruleset(
     name = s"ruleset:$domain",
     args = RulesetArgs(
       // Zone entrypoint for this phase is named "default"; renaming ForceNew's the
       // resource and Cloudflare then 400s (only one ruleset per phase).
       name = "default",
-      description = s"$domain -> $to",
+      description = description,
       kind = "zone",
       zoneId = zoneId,
       phase = "http_request_dynamic_redirect",
-      rules = Seq(redirectRule(hosts, to))
+      rules = rules
     ),
     opts(ignoreChanges = Seq("name"))
+  )
+
+  private def hostRedirectRule(hosts: Seq[String], to: String): (RulesetRuleArgs, String) =
+    (redirectRule(hosts, to), s"$domain -> $to")
+
+  private def pathRedirectRule(redirect: DnsZone.PathRedirect): RulesetRuleArgs = RulesetRuleArgs(
+    action = "redirect",
+    description = s"${redirect.path} -> ${redirect.to}",
+    expression = s"""(http.request.uri.path eq "${redirect.path}")""",
+    actionParameters = RulesetRuleActionParametersArgs(
+      fromValue = RulesetRuleActionParametersFromValueArgs(
+        preserveQueryString = true,
+        statusCode = 301,
+        targetUrl = RulesetRuleActionParametersFromValueTargetUrlArgs(
+          value = redirect.to
+        )
+      )
+    )
   )
 
   private def redirectRule(hosts: Seq[String], to: String): RulesetRuleArgs = RulesetRuleArgs(
