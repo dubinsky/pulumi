@@ -4,20 +4,11 @@ pluginManagement {
     gradlePluginPortal()
   }
   // String path: a File would call Settings.includeBuild (not a plugin build).
-  if (gradle.parent == null) {
-    final String conventionsDir =
-      providers.gradleProperty('podvalGradleDir').getOrElse('../podval-gradle')
-    if (file(conventionsDir).isDirectory() && file("${conventionsDir}/settings.gradle").isFile()) {
-      includeBuild conventionsDir
-    }
-  } else {
-    // The parent's plugin include is not visible here, and 0.4.0 is not published.
-    // Including this directory again returns the build Gradle already registered.
-    final String conventionsDir =
-      providers.gradleProperty('podvalGradleDir').getOrElse('../podval-gradle')
-    if (file(conventionsDir).isDirectory() && file("${conventionsDir}/settings.gradle").isFile()) {
-      includeBuild conventionsDir
-    }
+  // An included build does not see its parent's pluginManagement include, and 0.4.0 is not published.
+  final String conventionsDir =
+    providers.gradleProperty('podvalGradleDir').getOrElse('../podval-gradle')
+  if (file(conventionsDir).isDirectory() && file("${conventionsDir}/settings.gradle").isFile()) {
+    includeBuild conventionsDir
   }
 }
 
