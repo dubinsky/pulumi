@@ -4,8 +4,15 @@ pluginManagement {
     gradlePluginPortal()
   }
   // String path: a File would call Settings.includeBuild (not a plugin build).
-  // A parent build has already included this directory and Gradle rejects a second include.
   if (gradle.parent == null) {
+    final String conventionsDir =
+      providers.gradleProperty('podvalGradleDir').getOrElse('../podval-gradle')
+    if (file(conventionsDir).isDirectory() && file("${conventionsDir}/settings.gradle").isFile()) {
+      includeBuild conventionsDir
+    }
+  } else {
+    // The parent's plugin include is not visible here, and 0.4.0 is not published.
+    // Including this directory again returns the build Gradle already registered.
     final String conventionsDir =
       providers.gradleProperty('podvalGradleDir').getOrElse('../podval-gradle')
     if (file(conventionsDir).isDirectory() && file("${conventionsDir}/settings.gradle").isFile()) {
@@ -15,7 +22,14 @@ pluginManagement {
 }
 
 plugins {
-  id 'org.podval.conventions.settings' version '0.3.0'
+  id 'org.podval.conventions.settings' version '0.4.0'
+}
+
+podvalSettings {
+  acceptVersionIf { version ->
+    // Besom stable line: 9.0.0-core.0.5, 6.20.0-core.0.5. Not 1.0.0-legacy, not 0.017.
+    version ==~ /[0-9]+(\.[0-9]+)*-core\.[0-9]+(\.[0-9]+)*/
+  }
 }
 
 rootProject.name = 'org.podval.tools.pulumi'
