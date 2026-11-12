@@ -69,14 +69,17 @@ final class LogicalNamesTest extends AnyFunSuite:
     val rulesetDescription = Names.hostRulesetDescription(domain, to)
     assert(ruleDescription == "podval.dev, www.podval.dev -> www.podval.org")
     assert(rulesetDescription == "podval.dev -> www.podval.org")
+    assert(Names.rulesetDescription(Some(rulesetDescription), None) == "podval.dev -> www.podval.org")
     assert(Names.httpsSetting(proxied = false, alwaysUseHttps = false, mode) == Some("on"))
     assert(Names.apexAndWwwRecords(domain, to, proxied = false, mode) == Seq(
       Names.RecordSpec("A", "@", "192.0.2.1", proxied = true, replaceCname = true),
       Names.RecordSpec("A", "www", "192.0.2.1", proxied = true, replaceCname = true)
     ))
-    assert(Names.recordResourceName(domain, "A", "@", replaceCname = true) == "dnsRecord:podval.dev-A-@")
+    // record's replaceCname branch calls replaceCnamePulumiName. Besom rejects a shared call
+    // as a resource name, so this test names that def and does not keep a second if.
+    assert(Names.replaceCnamePulumiName(domain, "@") == "dnsRecord:podval.dev-A-@")
     assert(Names.replaceCnameAlias(domain, "@") == "dnsRecord:podval.dev-CNAME-@")
-    assert(Names.recordResourceName(domain, "A", "www", replaceCname = true) == "dnsRecord:podval.dev-A-www")
+    assert(Names.replaceCnamePulumiName(domain, "www") == "dnsRecord:podval.dev-A-www")
     assert(Names.replaceCnameAlias(domain, "www") == "dnsRecord:podval.dev-CNAME-www")
 
   test("OrganizationIam terraform@podval-infra billing.admin"):
@@ -118,10 +121,10 @@ final class LogicalNamesTest extends AnyFunSuite:
       Names.RecordSpec("A", "@", "192.0.2.1", proxied = true, replaceCname = true),
       Names.RecordSpec("CNAME", "www", "ghs.googlehosted.com", proxied = false, replaceCname = false)
     ))
-    assert(Names.recordResourceName("cognomath.org", "A", "@", replaceCname = true) == "dnsRecord:cognomath.org-A-@")
+    assert(Names.replaceCnamePulumiName("cognomath.org", "@") == "dnsRecord:cognomath.org-A-@")
     assert(Names.replaceCnameAlias("cognomath.org", "@") == "dnsRecord:cognomath.org-CNAME-@")
-    assert(Names.recordResourceName("cognomath.org", "CNAME", "www", replaceCname = false) ==
-      "dnsRecord:cognomath.org-CNAME-www")
+    // www is not replaceCname, so record calls dnsRecordPulumiName.
+    assert(Names.dnsRecordPulumiName("cognomath.org", "CNAME", "www") == "dnsRecord:cognomath.org-CNAME-www")
     assert(Names.hostRedirectFor("cognomath.org", "ghs.googlehosted.com", mode) ==
       Some(Names.HostRedirect(Seq("cognomath.org"), "www.cognomath.org")))
     assert(Names.hostRuleDescription(Seq("cognomath.org"), "www.cognomath.org") == "cognomath.org -> www.cognomath.org")
@@ -140,12 +143,13 @@ final class LogicalNamesTest extends AnyFunSuite:
     val podvalMode = Names.apexMode(alias = false, www = "dubinsky.github.io")
     assert(podvalMode == ApexMode.Ordinary)
     assert(Names.httpsSetting(proxied = true, alwaysUseHttps = true, podvalMode) == Some("on"))
+    assert(Names.httpsSetting(proxied = true, alwaysUseHttps = false, podvalMode) == Some("off"))
     assert(Names.apexAndWwwRecords("podval.org", "dubinsky.github.io", proxied = true, podvalMode) == Seq(
       Names.RecordSpec("CNAME", "@", "www.podval.org", proxied = true, replaceCname = false),
       Names.RecordSpec("CNAME", "www", "dubinsky.github.io", proxied = true, replaceCname = false)
     ))
-    assert(Names.recordResourceName("podval.org", "CNAME", "@", replaceCname = false) == "dnsRecord:podval.org-CNAME-@")
-    assert(Names.recordResourceName("podval.org", "CNAME", "www", replaceCname = false) == "dnsRecord:podval.org-CNAME-www")
+    assert(Names.dnsRecordPulumiName("podval.org", "CNAME", "@") == "dnsRecord:podval.org-CNAME-@")
+    assert(Names.dnsRecordPulumiName("podval.org", "CNAME", "www") == "dnsRecord:podval.org-CNAME-www")
     assert(Names.hostRedirectFor("podval.org", "dubinsky.github.io", podvalMode).isEmpty)
     val googleHosted = "ghs.googlehosted.com"
     assertExtra("podval.org", "calendar", googleHosted, "dnsRecord:podval.org-CNAME-calendar")
@@ -254,7 +258,78 @@ final class LogicalNamesTest extends AnyFunSuite:
     assert(Names.projectServiceName("cognomath-firebase", "identitytoolkit") ==
       "project:cognomath-firebase/service:identitytoolkit")
 
+  test("registration order and the returned Seq are not the same"):
+    import ZoneStep.*
+    assert(Names.registrationOrder == Seq(
+      Mail, ExtraCnames, ApexAndWww, AlwaysHttps, MinTls, Dnssec, Caa, Redirects
+    ))
+    assert(Names.returnedOrder == Seq(
+      Zone, MinTls, Dnssec, AlwaysHttps, ExtraCnames, ApexAndWww, Redirects, Mail, Caa
+    ))
+    assert(!Names.registrationOrder.contains(Zone))
+    assert(Names.returnedOrder.head == Zone)
+    assert(Names.returnedOrder.filter(_ != Zone).toSet == Names.registrationOrder.toSet)
+
+  test("mail: DKIM zones keep the caller text; the others refuse spoofing"):
+    val caller = """"v=DKIM1; k=rsa; p=abc" "def""""
+    assert(Names.mailRecords("podval.org", Some(caller)) == Seq(
+      Names.RecordSpec("TXT", "podval.org", """"v=spf1 include:_spf.google.com ~all"""", proxied = false, replaceCname = false),
+      Names.RecordSpec("TXT", "google._domainkey", caller, proxied = false, replaceCname = false),
+      Names.RecordSpec("MX", "@", "smtp.google.com", proxied = false, replaceCname = false, priority = Some(1)),
+      Names.RecordSpec("TXT", "_dmarc", """"v=DMARC1; p=none"""", proxied = false, replaceCname = false)
+    ))
+    assert(Names.mailRecords("opentorah.org", Some(caller))(1).content == caller)
+    assert(Names.mailRecords("cognomath.org", Some(caller))(1).content == caller)
+    val refused = Seq(
+      Names.RecordSpec("TXT", "podval.dev", """"v=spf1 -all"""", proxied = false, replaceCname = false),
+      Names.RecordSpec("TXT", "_dmarc", """"v=DMARC1; p=reject"""", proxied = false, replaceCname = false)
+    )
+    assert(Names.mailRecords("podval.dev", None) == refused)
+    assert(Names.mailRecords("mathworlds.org", None).map(_.content) == refused.map(_.content))
+    assert(Names.mailRecords("alter-rebbe.org", None).map(_.content) == refused.map(_.content))
+    assert(Names.mailRecords("chumashquestions.org", None).map(_.name) == Seq("chumashquestions.org", "_dmarc"))
+
+  test("every zone: min TLS 1.2, DNSSEC active, CAA flags 0 and ttl 1"):
+    assert(Names.minTlsSettingId == "min_tls_version")
+    assert(Names.minTlsValue == "1.2")
+    assert(Names.alwaysUseHttpsSettingId == "always_use_https")
+    assert(Names.dnssecStatus == "active")
+    assert(Names.caaFlags == 0)
+    assert(Names.cloudflareAutomaticTtl == 1)
+    assert(Names.caaDnsName == "@")
+    assert(Names.caaPairs == Seq(
+      "issue" -> "pki.goog",
+      "issue" -> "letsencrypt.org",
+      "issuewild" -> "pki.goog",
+      "issuewild" -> "letsencrypt.org"
+    ))
+    assert(Names.caaPairs.map { (tag, ca) =>
+      Names.caaPulumiName("podval.org", tag, ca)
+    } == Seq(
+      "dnsRecord:podval.org-CAA-issue-pki.goog",
+      "dnsRecord:podval.org-CAA-issue-letsencrypt.org",
+      "dnsRecord:podval.org-CAA-issuewild-pki.goog",
+      "dnsRecord:podval.org-CAA-issuewild-letsencrypt.org"
+    ))
+
+  test("chumashquestions.org path rule is before any host rule, and there is no host rule"):
+    val domain = "chumashquestions.org"
+    val mode = Names.apexMode(alias = false, www = "opentorah.github.io")
+    assert(mode == ApexMode.Ordinary)
+    assert(Names.hostRedirectFor(domain, "opentorah.github.io", mode).isEmpty)
+    val path = "/book.pdf"
+    val to = "https://www.chumashquestions.org/book/book.pdf"
+    assert(Names.pathRuleDescription(path, to) == "/book.pdf -> https://www.chumashquestions.org/book/book.pdf")
+    assert(Names.redirectRulesInOrder(Seq(path), None) == Seq(path))
+    assert(Names.pathRulesetDescription(domain) == "chumashquestions.org path redirects")
+    assert(Names.rulesetDescription(None, Some(Names.pathRulesetDescription(domain))) ==
+      "chumashquestions.org path redirects")
+    assert(Names.redirectRulesInOrder(Seq(path), Some("host")) == Seq(path, "host"))
+    val hostNote = "podval.dev -> www.podval.org"
+    assert(Names.rulesetDescription(Some(hostNote), Some("podval.dev path redirects")) ==
+      "podval.dev -> www.podval.org; podval.dev path redirects")
+
   private def assertExtra(domain: String, name: String, target: String, pulumiName: String): Unit =
     val spec = Names.extraCname(name, target)
     assert(spec == Names.RecordSpec("CNAME", name, target, proxied = false, replaceCname = false))
-    assert(Names.recordResourceName(domain, spec.typ, spec.name, spec.replaceCname) == pulumiName)
+    assert(Names.dnsRecordPulumiName(domain, spec.typ, spec.name) == pulumiName)

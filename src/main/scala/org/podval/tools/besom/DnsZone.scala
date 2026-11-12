@@ -24,7 +24,13 @@ object DnsZone:
   )(using Context, CloudFlare): DnsZone =
     DnsZone(domain = domain, www = canonical, alias = true)
 
-/** Open for `PodvalOrgZone`, which passes constructor arguments and does not read them. */
+/** `www` is a CNAME target, or `DnsZone.GOOGLEHOSTED`, or (for `DnsZone.alias`) the canonical host.
+  * `proxied` does not imply Always Use HTTPS. Google origin emits HTTPS `on` without either flag.
+  * Extra CNAMEs stay DNS-only. TTL `1` is Cloudflare automatic.
+  * `DnsZone.BUCKET` (`c.storage.googleapis.com`) is a CNAME target for website buckets, not an apex mode.
+  *
+  * Open for `PodvalOrgZone`, which passes constructor arguments and does not read them.
+  */
 open class DnsZone(
   domain: String,
   www: String,
@@ -32,7 +38,7 @@ open class DnsZone(
   dkim: Option[String] = None,
   /** Orange-cloud apex (`@`) and `www`. Extra `cnames` stay DNS-only. */
   proxied: Boolean = false,
-  /** Always Use HTTPS. Emitted only when `proxied`, `alwaysUseHttps`, or `alias` is set. */
+  /** Always Use HTTPS. `proxied` does not turn this on. Google origin and `alias` emit `on` without this flag. */
   alwaysUseHttps: Boolean = false,
   /** Auxiliary zone: do not CNAME to GitHub; redirect `@` and `www` to `www`. */
   alias: Boolean = false,
@@ -54,100 +60,114 @@ open class DnsZone(
 
   // CognoMath previews with -Xss8m. Eight zones already overflow Besom Result.runM.
   // Another flatMap per record fails that preview before a diff is printed.
+  //
+  // registrationOrder is when these direct calls register. returnedOrder is the Seq this
+  // method returns. They are not the same constraint. zone is only in the returned Seq:
+  // Zone(...) already ran in the class body, during dnsZones(). Building along returnedOrder
+  // would register the children at the wrong time.
   final override def resources: Seq[Output[?]] =
-    // see https://support.google.com/a/answer/16004259
-    // old MX records:
-    //  1 aspmx.l.google.com
-    //  5 alt1.aspmx.l.google.com
-    //  5 alt2.aspmx.l.google.com
-    //  10 alt3.aspmx.l.google.com
-    //  10 alt4.aspmx.l.google.com
-    val mail: Seq[Output[DnsRecord]] = dkim.fold(
-      // No Workspace mail: refuse spoofing on unused names.
-      Seq(
-        record("TXT", Names.spfDnsName(domain), """"v=spf1 -all""""),
-        record("TXT", Names.dmarcDnsName, """"v=DMARC1; p=reject"""")
-      )
-    )(dkim => Seq(
-      record("TXT", Names.spfDnsName(domain), """"v=spf1 include:_spf.google.com ~all""""),
-      record("TXT", Names.dkimDnsName, dkim),
-      record("MX", Names.mxDnsName, "smtp.google.com", priority = Some(1)),
-      record("TXT", Names.dmarcDnsName, """"v=DMARC1; p=none"""")
-    ))
-
-    val extraCnames: Seq[Output[DnsRecord]] =
-      for (name, target) <- this.cnames yield
-        val spec: Names.RecordSpec = Names.extraCname(name, target)
-        record(spec.typ, spec.name, spec.content, proxied = spec.proxied, replaceCname = spec.replaceCname)
-
     // Alias, then www == GOOGLEHOSTED. Records, the host redirect, and Always Use HTTPS share this value.
+    // It registers nothing, so it is not a step in registrationOrder.
     val mode: ApexMode = Names.apexMode(alias, www)
 
-    // 192.0.2.1 is TEST-NET-1; orange-cloud so Single Redirects can run.
-    val apexAndWww: Seq[Output[DnsRecord]] =
-      for spec <- Names.apexAndWwwRecords(domain, www, proxied = proxied, mode) yield
-        record(spec.typ, spec.name, spec.content, proxied = spec.proxied, replaceCname = spec.replaceCname)
+    // Called in registrationOrder. Constructors run then, not when the returned Seq is built.
+    def outputs(step: ZoneStep): Seq[Output[?]] = step match
+      case ZoneStep.Mail =>
+        // see https://support.google.com/a/answer/16004259
+        // old MX records:
+        //  1 aspmx.l.google.com
+        //  5 alt1.aspmx.l.google.com
+        //  5 alt2.aspmx.l.google.com
+        //  10 alt3.aspmx.l.google.com
+        //  10 alt4.aspmx.l.google.com
+        Names.mailRecords(domain, dkim).map { spec =>
+          record(
+            spec.typ,
+            spec.name,
+            spec.content,
+            proxied = spec.proxied,
+            priority = spec.priority,
+            replaceCname = spec.replaceCname
+          )
+        }
 
-    val alwaysHttps: Seq[Output[ZoneSetting]] =
-      Names.httpsSetting(proxied, alwaysUseHttps, mode) match
-        case Some(value) =>
-          Seq(ZoneSetting(
-            name = Names.zoneSettingPulumiName(domain, "always_use_https"),
-            args = ZoneSettingArgs(
-              zoneId = zoneId,
-              settingId = "always_use_https",
-              value = JsString(value)
-            ),
-            opts = cloudflareResourceOptions()
-          ))
-        case None =>
-          Seq.empty
+      case ZoneStep.ExtraCnames =>
+        for (name, target) <- this.cnames yield
+          val spec: Names.RecordSpec = Names.extraCname(name, target)
+          record(spec.typ, spec.name, spec.content, proxied = spec.proxied, replaceCname = spec.replaceCname)
 
-    val minTls: Output[ZoneSetting] = ZoneSetting(
-      name = Names.zoneSettingPulumiName(domain, "min_tls_version"),
-      args = ZoneSettingArgs(
-        zoneId = zoneId,
-        settingId = "min_tls_version",
-        value = JsString("1.2")
-      ),
-      opts = cloudflareResourceOptions()
-    )
+      case ZoneStep.ApexAndWww =>
+        // 192.0.2.1 is TEST-NET-1; orange-cloud so Single Redirects can run.
+        for spec <- Names.apexAndWwwRecords(domain, www, proxied = proxied, mode) yield
+          record(spec.typ, spec.name, spec.content, proxied = spec.proxied, replaceCname = spec.replaceCname)
 
-    val dnssec: Output[ZoneDnssec] = ZoneDnssec(
-      name = Names.zoneDnssecPulumiName(domain),
-      args = ZoneDnssecArgs(zoneId = zoneId, status = "active"),
-      opts = cloudflareResourceOptions()
-    )
+      case ZoneStep.AlwaysHttps =>
+        Names.httpsSetting(proxied, alwaysUseHttps, mode) match
+          case Some(value) =>
+            Seq(ZoneSetting(
+              name = Names.zoneSettingPulumiName(domain, Names.alwaysUseHttpsSettingId),
+              args = ZoneSettingArgs(
+                zoneId = zoneId,
+                settingId = Names.alwaysUseHttpsSettingId,
+                value = JsString(value)
+              ),
+              opts = cloudflareResourceOptions()
+            ))
+          case None =>
+            Seq.empty
 
-    val caa: Seq[Output[DnsRecord]] =
-      for
-        tag <- Seq("issue", "issuewild")
-        ca <- Seq("pki.goog", "letsencrypt.org")
-      yield caaRecord(tag, ca)
+      case ZoneStep.MinTls =>
+        Seq(ZoneSetting(
+          name = Names.zoneSettingPulumiName(domain, Names.minTlsSettingId),
+          args = ZoneSettingArgs(
+            zoneId = zoneId,
+            settingId = Names.minTlsSettingId,
+            value = JsString(Names.minTlsValue)
+          ),
+          opts = cloudflareResourceOptions()
+        ))
 
-    val hostRedirect: Option[(RulesetRuleArgs, String)] =
-      Names.hostRedirectFor(domain, www, mode).map { spec =>
-        (redirectRule(spec.hosts, spec.to), Names.hostRulesetDescription(domain, spec.to))
-      }
+      case ZoneStep.Dnssec =>
+        Seq(ZoneDnssec(
+          name = Names.zoneDnssecPulumiName(domain),
+          args = ZoneDnssecArgs(zoneId = zoneId, status = Names.dnssecStatus),
+          opts = cloudflareResourceOptions()
+        ))
 
-    val pathRules: Seq[RulesetRuleArgs] = pathRedirects.map(pathRedirectRule)
-    val redirectRules: Seq[RulesetRuleArgs] = pathRules ++ hostRedirect.map(_._1)
-    val redirects: Seq[Output[Ruleset]] =
-      if redirectRules.isEmpty then Seq.empty
-      else
-        val description: String =
-          val host: Option[String] = hostRedirect.map(_._2)
-          val paths: Option[String] = Option.when(pathRules.nonEmpty)(s"$domain path redirects")
-          (host.toSeq ++ paths.toSeq).mkString("; ")
-        Seq(redirectRuleset(redirectRules, description))
+      case ZoneStep.Caa =>
+        Names.caaPairs.map { (tag, ca) =>
+          caaRecord(tag, ca)
+        }
 
-    Seq(zone, minTls, dnssec) ++
-    alwaysHttps ++
-    extraCnames ++
-    apexAndWww ++
-    redirects ++
-    mail ++
-    caa
+      case ZoneStep.Redirects =>
+        val hostRedirect: Option[(RulesetRuleArgs, String)] =
+          Names.hostRedirectFor(domain, www, mode).map { spec =>
+            (redirectRule(spec.hosts, spec.to), Names.hostRulesetDescription(domain, spec.to))
+          }
+        val pathRules: Seq[RulesetRuleArgs] = pathRedirects.map(pathRedirectRule)
+        val redirectRules: Seq[RulesetRuleArgs] =
+          Names.redirectRulesInOrder(pathRules, hostRedirect.map(_._1))
+        if redirectRules.isEmpty then Seq.empty
+        else
+          val description: String =
+            Names.rulesetDescription(
+              hostRedirect.map(_._2),
+              Option.when(pathRules.nonEmpty)(Names.pathRulesetDescription(domain))
+            )
+          Seq(redirectRuleset(redirectRules, description))
+
+      case ZoneStep.Zone =>
+        throw IllegalStateException(
+          "zone registers in the DnsZone class body, during dnsZones(), before resources runs"
+        )
+
+    val constructed: Map[ZoneStep, Seq[Output[?]]] =
+      Names.registrationOrder.map(step => step -> outputs(step)).toMap
+
+    Names.returnedOrder.map {
+      case ZoneStep.Zone => Seq(zone)
+      case step => constructed(step)
+    }.flatten
 
   private def redirectRuleset(rules: Seq[RulesetRuleArgs], description: String): Output[Ruleset] = Ruleset(
     name = Names.rulesetPulumiName(domain),
@@ -201,8 +221,8 @@ open class DnsZone(
         zoneId = zoneId,
         `type` = "CAA",
         name = Names.caaDnsName,
-        data = DnsRecordDataArgs(flags = JsNumber(0), tag = tag, value = ca),
-        ttl = 1
+        data = DnsRecordDataArgs(flags = JsNumber(Names.caaFlags), tag = tag, value = ca),
+        ttl = Names.cloudflareAutomaticTtl
       ),
       opts = cloudflareResourceOptions()
     )
@@ -212,7 +232,7 @@ open class DnsZone(
     name: String,
     content: String,
     proxied: Boolean = false,
-    ttl: Double = 1,
+    ttl: Double = Names.cloudflareAutomaticTtl,
     priority: Option[Double] = None,
     replaceCname: Boolean = false
   ): Output[DnsRecord] =
@@ -227,6 +247,8 @@ open class DnsZone(
     )
     // Alias and deleteBeforeReplace live in cloudflareReplaceCnameOptions. Google-origin www
     // is replaceCname = false and stays on cloudflareResourceOptions, with no alias.
+    // Each branch calls its own inline name. Besom rejects a shared call as a resource name.
+    // Tests call replaceCnamePulumiName or dnsRecordPulumiName and do not keep a second if.
     if replaceCname then
       DnsRecord(
         name = Names.replaceCnamePulumiName(domain, name),
