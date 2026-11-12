@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- fix: pin GCP `9.0.0` and Cloudflare `6.20.0` on the provider, each resource, and the GCP invokes, so a newer installed
+  plugin does not take over the default provider.
 - change: Workspace `_dmarc` is `p=none` only (no `rua=`), so receivers stop mailing aggregate reports to `dub@`.
 - feat: `DnsZone.pathRedirects` — exact-path 301s in the zone Single Redirect ruleset.
 

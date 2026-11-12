@@ -1,7 +1,7 @@
 package org.podval.tools.besom
 
 import besom.Pulumi.PulumiInterpolationOps
-import besom.{Context, CustomResourceOptions, Output}
+import besom.{Context, Output}
 import besom.api.gcp.cloudidentity.inputs.{GroupGroupKeyArgs, GroupMembershipPreferredMemberKeyArgs, GroupMembershipRoleArgs}
 import besom.api.gcp.cloudidentity.{Group as GroupGCP, GroupArgs, GroupMembership, GroupMembershipArgs}
 
@@ -28,7 +28,7 @@ final class Group(
         parent = pulumi"customers/${gcp.directoryCustomerId}"
       ),
       // ForceNew in newer GCP provider; was unset in old state. Do not replace existing groups.
-      CustomResourceOptions(ignoreChanges = Seq("initialGroupConfig"))
+      gcpResourceOptions("initialGroupConfig")
     )
 
     Seq(group) ++ WithResources(Seq(
@@ -53,7 +53,7 @@ final class Group(
           preferredMemberKey = GroupMembershipPreferredMemberKeyArgs(id = user.email),
           roles = roles
         ),
-        CustomResourceOptions(ignoreChanges = Seq("createIgnoreAlreadyExists"))
+        gcpResourceOptions("createIgnoreAlreadyExists")
       )
     yield result
 

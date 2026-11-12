@@ -21,7 +21,7 @@ final class ServiceAccount(
         accountId = id,
         displayName = displayName,
         description = description
-      ))
+      ), gcpResourceOptions())
     yield result
 
   override def resources: Seq[Output[?]] =

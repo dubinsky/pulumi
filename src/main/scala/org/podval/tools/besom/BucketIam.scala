@@ -18,7 +18,7 @@ final class BucketIam[A: Principal](
           bucket = bucketName,
           member = principal.principalMember,
           role = s"roles/$role"
-        )
+        ), gcpResourceOptions()
       )
     yield result
   )

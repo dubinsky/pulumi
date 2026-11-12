@@ -19,7 +19,7 @@ final class Project(
     name = displayName,
     labels = if labels.isEmpty then None else Some(labels),
     autoCreateNetwork = autoCreateNetwork
-  ))
+  ), gcpResourceOptions())
 
   override def resources: Seq[Output[?]] =
     // pulumi import "gcp:projects/service:Service" "project:<project id>/service:<service>" "<project id>/<service>.googleapis.com"
@@ -30,7 +30,7 @@ final class Project(
           result: Service <- Service(s"project:$projectId/service:$service", ServiceArgs(
             project = projectId,
             service = s"$service.googleapis.com"
-          ))
+          ), gcpResourceOptions())
         yield result
 
     Seq(project) ++

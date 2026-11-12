@@ -45,7 +45,8 @@ open class DnsZone(
     args = ZoneArgs(
       account = ZoneAccountArgs(id = cloudFlare.accountId),
       name = domain
-    )
+    ),
+    opts = cloudflareResourceOptions()
   )
 
   private val zoneId: Output[ResourceId] = zone.id
@@ -104,7 +105,8 @@ open class DnsZone(
             zoneId = zoneId,
             settingId = "always_use_https",
             value = JsString(if alwaysUseHttps || alias || googleOrigin then "on" else "off")
-          )
+          ),
+          opts = cloudflareResourceOptions()
         ))
       else
         Seq.empty
@@ -115,12 +117,14 @@ open class DnsZone(
         zoneId = zoneId,
         settingId = "min_tls_version",
         value = JsString("1.2")
-      )
+      ),
+      opts = cloudflareResourceOptions()
     )
 
     val dnssec: Output[ZoneDnssec] = ZoneDnssec(
       name = s"zoneDnssec:$domain",
-      args = ZoneDnssecArgs(zoneId = zoneId, status = "active")
+      args = ZoneDnssecArgs(zoneId = zoneId, status = "active"),
+      opts = cloudflareResourceOptions()
     )
 
     val caa: Seq[Output[DnsRecord]] =
@@ -165,7 +169,7 @@ open class DnsZone(
       phase = "http_request_dynamic_redirect",
       rules = rules
     ),
-    opts(ignoreChanges = Seq("name"))
+    cloudflareResourceOptions("name")
   )
 
   private def hostRedirectRule(hosts: Seq[String], to: String): (RulesetRuleArgs, String) =
@@ -210,7 +214,8 @@ open class DnsZone(
         name = "@",
         data = DnsRecordDataArgs(flags = JsNumber(0), tag = tag, value = ca),
         ttl = 1
-      )
+      ),
+      opts = cloudflareResourceOptions()
     )
 
   private def record(
@@ -236,9 +241,10 @@ open class DnsZone(
         name = s"dnsRecord:$domain-A-$name",
         args = args,
         opts(
+          version = "6.20.0",
           aliases = SpecResourceAlias(name = Some(s"dnsRecord:$domain-CNAME-$name")),
           deleteBeforeReplace = true
         )
       )
     else
-      DnsRecord(name = s"dnsRecord:$domain-$typ-$name", args = args)
+      DnsRecord(name = s"dnsRecord:$domain-$typ-$name", args = args, opts = cloudflareResourceOptions())

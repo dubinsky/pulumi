@@ -20,5 +20,5 @@ final class ProjectIam[A: Principal](
             project = projectId,
             member = principal.principalMember,
             role = s"roles/$role"
-          ))
+          ), gcpResourceOptions())
       yield result

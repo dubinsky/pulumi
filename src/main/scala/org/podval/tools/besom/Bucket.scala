@@ -27,7 +27,7 @@ final class Bucket(
     website = notFoundPage.map(notFoundPage => BucketWebsiteArgs(
       notFoundPage = notFoundPage
     ))
-  ))
+  ), gcpResourceOptions())
 
   override def resources: Seq[Output[?]] =
     val forPublic: Option[BucketIam[Principal.AllUsers.type]] =
