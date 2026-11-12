@@ -4,7 +4,9 @@ import besom.{Config, Context, Output, Pulumi, Stack}
 
 abstract class Main(
   domain: String,
-  infraProjectId: String, // TODO gcp.provider.project.map(_.get)
+  // Stays a String. All three stacks pass the same id as gcp:project. The grok-bot key
+  // name uses it outside any flatMap so preview shows the key.
+  infraProjectId: String,
   infraProjectName: String,
   stateBucketLocation: String,
   cloudFlareAccountId: String,
@@ -124,7 +126,8 @@ abstract class Main(
     gcp: Gcp
   ): Seq[Group]
 
-  // Stays Seq[WithResources]. AlterRebbe appends its raw Output inside its own resources.
+  // Stays Seq[WithResources] because AlterRebbe is a WithResources returning ProjectIam[ServiceAgent].
+  // A ComponentResource parent would change every child URN.
   def resources(infraProject: Project)(using
     ctx: Context,
     gcp: Gcp
