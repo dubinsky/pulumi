@@ -11,8 +11,9 @@ import besom.json.{JsNumber, JsString}
 import besom.types.ResourceId
 
 object DnsZone:
-  val GOOGLEHOSTED: String = "ghs.googlehosted.com"
-  val BUCKET: String = "c.storage.googleapis.com"
+  // Stacks pass these. The literal is on Names so tests can lock it without loading Besom.
+  val GOOGLEHOSTED: String = Names.googleHostedCname
+  val BUCKET: String = Names.bucketCname
 
   /** Exact-path 301. `path` is `http.request.uri.path` (no query). `to` is an absolute URL. */
   final case class PathRedirect(path: String, to: String)
@@ -41,7 +42,7 @@ open class DnsZone(
 
   // pulumi import cloudflare:index/zone:Zone zone:<zone name> <zone id>
   private val zone: Output[Zone] = Zone(
-    name = s"zone:$domain",
+    name = Names.zonePulumiName(domain),
     args = ZoneArgs(
       account = ZoneAccountArgs(id = cloudFlare.accountId),
       name = domain
@@ -62,57 +63,46 @@ open class DnsZone(
     val mail: Seq[Output[DnsRecord]] = dkim.fold(
       // No Workspace mail: refuse spoofing on unused names.
       Seq(
-        record("TXT", domain, """"v=spf1 -all""""),
-        record("TXT", "_dmarc", """"v=DMARC1; p=reject"""")
+        record("TXT", Names.spfDnsName(domain), """"v=spf1 -all""""),
+        record("TXT", Names.dmarcDnsName, """"v=DMARC1; p=reject"""")
       )
     )(dkim => Seq(
-      record("TXT", domain, """"v=spf1 include:_spf.google.com ~all""""),
-      record("TXT", "google._domainkey", dkim),
-      record("MX" , "@", "smtp.google.com", priority = Some(1)),
-      record("TXT", "_dmarc", """"v=DMARC1; p=none"""")
+      record("TXT", Names.spfDnsName(domain), """"v=spf1 include:_spf.google.com ~all""""),
+      record("TXT", Names.dkimDnsName, dkim),
+      record("MX", Names.mxDnsName, "smtp.google.com", priority = Some(1)),
+      record("TXT", Names.dmarcDnsName, """"v=DMARC1; p=none"""")
     ))
 
     val extraCnames: Seq[Output[DnsRecord]] =
-      for (name, target) <- this.cnames yield record("CNAME", name, target)
+      for (name, target) <- this.cnames yield
+        val spec: Names.RecordSpec = Names.extraCname(name, target)
+        record(spec.typ, spec.name, spec.content, proxied = spec.proxied, replaceCname = spec.replaceCname)
 
-    // ghs.googlehosted.com does not terminate TLS for a CNAME-flattened apex.
-    val googleOrigin: Boolean = www == DnsZone.GOOGLEHOSTED
+    // Alias, then www == GOOGLEHOSTED. Records, the host redirect, and Always Use HTTPS share this value.
+    val mode: ApexMode = Names.apexMode(alias, www)
 
+    // 192.0.2.1 is TEST-NET-1; orange-cloud so Single Redirects can run.
     val apexAndWww: Seq[Output[DnsRecord]] =
-      if alias then
-        // 192.0.2.1 is TEST-NET-1; orange-cloud so Single Redirects can run.
-        Seq(
-          record("A", "@", "192.0.2.1", proxied = true, replaceCname = true),
-          record("A", "www", "192.0.2.1", proxied = true, replaceCname = true)
-        )
-      else if googleOrigin then
-        Seq(
-          record("A", "@", "192.0.2.1", proxied = true, replaceCname = true),
-          record("CNAME", "www", www)
-        )
-      else
-        Seq(
-          record("CNAME", "@", s"www.$domain", proxied = proxied),
-          record("CNAME", "www", www, proxied = proxied)
-        )
+      for spec <- Names.apexAndWwwRecords(domain, www, proxied = proxied, mode) yield
+        record(spec.typ, spec.name, spec.content, proxied = spec.proxied, replaceCname = spec.replaceCname)
 
-    val emitHttps: Boolean = proxied || alwaysUseHttps || alias || googleOrigin
     val alwaysHttps: Seq[Output[ZoneSetting]] =
-      if emitHttps then
-        Seq(ZoneSetting(
-          name = s"zoneSetting:$domain:always_use_https",
-          args = ZoneSettingArgs(
-            zoneId = zoneId,
-            settingId = "always_use_https",
-            value = JsString(if alwaysUseHttps || alias || googleOrigin then "on" else "off")
-          ),
-          opts = cloudflareResourceOptions()
-        ))
-      else
-        Seq.empty
+      Names.httpsSetting(proxied, alwaysUseHttps, mode) match
+        case Some(value) =>
+          Seq(ZoneSetting(
+            name = Names.zoneSettingPulumiName(domain, "always_use_https"),
+            args = ZoneSettingArgs(
+              zoneId = zoneId,
+              settingId = "always_use_https",
+              value = JsString(value)
+            ),
+            opts = cloudflareResourceOptions()
+          ))
+        case None =>
+          Seq.empty
 
     val minTls: Output[ZoneSetting] = ZoneSetting(
-      name = s"zoneSetting:$domain:min_tls_version",
+      name = Names.zoneSettingPulumiName(domain, "min_tls_version"),
       args = ZoneSettingArgs(
         zoneId = zoneId,
         settingId = "min_tls_version",
@@ -122,7 +112,7 @@ open class DnsZone(
     )
 
     val dnssec: Output[ZoneDnssec] = ZoneDnssec(
-      name = s"zoneDnssec:$domain",
+      name = Names.zoneDnssecPulumiName(domain),
       args = ZoneDnssecArgs(zoneId = zoneId, status = "active"),
       opts = cloudflareResourceOptions()
     )
@@ -134,9 +124,9 @@ open class DnsZone(
       yield caaRecord(tag, ca)
 
     val hostRedirect: Option[(RulesetRuleArgs, String)] =
-      if alias then Some(hostRedirectRule(hosts = Seq(domain, s"www.$domain"), to = www))
-      else if googleOrigin then Some(hostRedirectRule(hosts = Seq(domain), to = s"www.$domain"))
-      else None
+      Names.hostRedirectFor(domain, www, mode).map { spec =>
+        (redirectRule(spec.hosts, spec.to), Names.hostRulesetDescription(domain, spec.to))
+      }
 
     val pathRules: Seq[RulesetRuleArgs] = pathRedirects.map(pathRedirectRule)
     val redirectRules: Seq[RulesetRuleArgs] = pathRules ++ hostRedirect.map(_._1)
@@ -158,33 +148,30 @@ open class DnsZone(
     caa
 
   private def redirectRuleset(rules: Seq[RulesetRuleArgs], description: String): Output[Ruleset] = Ruleset(
-    name = s"ruleset:$domain",
+    name = Names.rulesetPulumiName(domain),
     args = RulesetArgs(
       // Zone entrypoint for this phase is named "default"; renaming ForceNew's the
       // resource and Cloudflare then 400s (only one ruleset per phase).
-      name = "default",
+      name = Names.rulesetEntrypointName,
       description = description,
-      kind = "zone",
+      kind = Names.rulesetKind,
       zoneId = zoneId,
-      phase = "http_request_dynamic_redirect",
+      phase = Names.rulesetPhase,
       rules = rules
     ),
-    cloudflareResourceOptions("name")
+    cloudflareResourceOptions(Names.ignoreRulesetName)
   )
-
-  private def hostRedirectRule(hosts: Seq[String], to: String): (RulesetRuleArgs, String) =
-    (redirectRule(hosts, to), s"$domain -> $to")
 
   private def pathRedirectRule(redirect: DnsZone.PathRedirect): RulesetRuleArgs = RulesetRuleArgs(
     action = "redirect",
-    description = s"${redirect.path} -> ${redirect.to}",
-    expression = s"""(http.request.uri.path eq "${redirect.path}")""",
+    description = Names.pathRuleDescription(redirect.path, redirect.to),
+    expression = Names.pathMatchExpression(redirect.path),
     actionParameters = RulesetRuleActionParametersArgs(
       fromValue = RulesetRuleActionParametersFromValueArgs(
-        preserveQueryString = true,
-        statusCode = 301,
+        preserveQueryString = Names.redirectPreserveQueryString,
+        statusCode = Names.redirectStatusCode,
         targetUrl = RulesetRuleActionParametersFromValueTargetUrlArgs(
-          value = redirect.to
+          value = Names.pathRedirectTargetValue(redirect.to)
         )
       )
     )
@@ -192,14 +179,14 @@ open class DnsZone(
 
   private def redirectRule(hosts: Seq[String], to: String): RulesetRuleArgs = RulesetRuleArgs(
     action = "redirect",
-    description = s"${hosts.mkString(", ")} -> $to",
-    expression = hosts.map(h => s"""(http.host eq "$h")""").mkString(" or "),
+    description = Names.hostRuleDescription(hosts, to),
+    expression = Names.hostMatchExpression(hosts),
     actionParameters = RulesetRuleActionParametersArgs(
       fromValue = RulesetRuleActionParametersFromValueArgs(
-        preserveQueryString = true,
-        statusCode = 301,
+        preserveQueryString = Names.redirectPreserveQueryString,
+        statusCode = Names.redirectStatusCode,
         targetUrl = RulesetRuleActionParametersFromValueTargetUrlArgs(
-          expression = s"""concat("https://$to", http.request.uri.path)"""
+          expression = Names.hostRedirectTargetExpression(to)
         )
       )
     )
@@ -207,11 +194,11 @@ open class DnsZone(
 
   private def caaRecord(tag: String, ca: String): Output[DnsRecord] =
     DnsRecord(
-      name = s"dnsRecord:$domain-CAA-$tag-$ca",
+      name = Names.caaPulumiName(domain, tag, ca),
       args = DnsRecordArgs(
         zoneId = zoneId,
         `type` = "CAA",
-        name = "@",
+        name = Names.caaDnsName,
         data = DnsRecordDataArgs(flags = JsNumber(0), tag = tag, value = ca),
         ttl = 1
       ),
@@ -238,13 +225,17 @@ open class DnsZone(
     )
     if replaceCname then
       DnsRecord(
-        name = s"dnsRecord:$domain-A-$name",
+        name = Names.replaceCnamePulumiName(domain, name),
         args = args,
         opts(
           version = "6.20.0",
-          aliases = SpecResourceAlias(name = Some(s"dnsRecord:$domain-CNAME-$name")),
+          aliases = SpecResourceAlias(name = Some(Names.replaceCnameAlias(domain, name))),
           deleteBeforeReplace = true
         )
       )
     else
-      DnsRecord(name = s"dnsRecord:$domain-$typ-$name", args = args, opts = cloudflareResourceOptions())
+      DnsRecord(
+        name = Names.dnsRecordPulumiName(domain, typ, name),
+        args = args,
+        opts = cloudflareResourceOptions()
+      )

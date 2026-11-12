@@ -16,9 +16,9 @@ final class ProjectIam[A: Principal](
         projectId <- project.project.projectId
         principalResourceName <- principal.principalResourceName
         result <- IamMember(
-          s"project:$projectId/$principalResourceName/role:$role", IamMemberArgs(
+          Names.projectIamName(projectId, principalResourceName, role), IamMemberArgs(
             project = projectId,
             member = principal.principalMember,
-            role = s"roles/$role"
+            role = Names.iamRole(role)
           ), gcpResourceOptions())
       yield result

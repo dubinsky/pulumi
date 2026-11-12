@@ -14,9 +14,9 @@ final class OrganizationIam[A: Principal](
     for role <- roles yield
       for
         principalResourceName <- principal.principalResourceName
-        result <- IamMember(s"$principalResourceName/role:$role", IamMemberArgs(
+        result <- IamMember(Names.organizationIamName(principalResourceName, role), IamMemberArgs(
           orgId = gcp.orgId,
           member = principal.principalMember,
-          role = s"roles/$role"
+          role = Names.iamRole(role)
         ), gcpResourceOptions())
       yield result

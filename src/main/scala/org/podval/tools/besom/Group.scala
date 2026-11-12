@@ -17,9 +17,9 @@ final class Group(
   // Note: for members - "memberships", unlike Terraform ids where "members" is used!
   // pulumi import "gcp:cloudidentity/groupMembership:GroupMembership" "group:<group email>/user:<email>" "groups/<group id #>/memberships/<user id #>"
   override def resources: Seq[Output[?]] =
-    val groupEmail: String = s"$name@${gcp.domain}"
+    val groupEmail: String = Names.groupEmailAddress(name, gcp.domain)
     val group: Output[GroupGCP] = GroupGCP(
-      s"group:$groupEmail",
+      Names.groupPulumiName(groupEmail),
       GroupArgs(
         displayName = displayName,
         description = description,
@@ -28,7 +28,7 @@ final class Group(
         parent = pulumi"customers/${gcp.directoryCustomerId}"
       ),
       // ForceNew in newer GCP provider; was unset in old state. Do not replace existing groups.
-      gcpResourceOptions("initialGroupConfig")
+      gcpResourceOptions(Names.ignoreInitialGroupConfig)
     )
 
     Seq(group) ++ WithResources(Seq(
@@ -46,15 +46,18 @@ final class Group(
   )(using ctx: Context): Output[GroupMembership] =
     for
       groupEmail: String <- group.groupKey.id
-      result: GroupMembership <- GroupMembership(
-        s"group:$groupEmail/${user.resourceName}",
-        GroupMembershipArgs(
-          group = group.id,
-          preferredMemberKey = GroupMembershipPreferredMemberKeyArgs(id = user.email),
-          roles = roles
-        ),
-        gcpResourceOptions("createIgnoreAlreadyExists")
-      )
+      result: GroupMembership <-
+        // A method selection inlined into the resource name is not an interpolation Besom accepts.
+        val userResourceName = user.resourceName
+        GroupMembership(
+          Names.groupMembershipName(groupEmail, userResourceName),
+          GroupMembershipArgs(
+            group = group.id,
+            preferredMemberKey = GroupMembershipPreferredMemberKeyArgs(id = user.email),
+            roles = roles
+          ),
+          gcpResourceOptions(Names.ignoreCreateIgnoreAlreadyExists)
+        )
     yield result
 
   private def groupRole(name: String): GroupMembershipRoleArgs = GroupMembershipRoleArgs(name = name)

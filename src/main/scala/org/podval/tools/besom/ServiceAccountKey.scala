@@ -22,7 +22,7 @@ final class ServiceAccountKey(
   // preview would not show the key. dependsOn still creates the key after key admin is granted.
   private val keyAdminMembers: Seq[Output[IamMember]] =
     keyAdmins.map { (label, admin) =>
-      IamMember(s"$id/keyAdmin:$label", IamMemberArgs(
+      IamMember(Names.serviceAccountKeyAdminName(id, label), IamMemberArgs(
         serviceAccountId = account.flatMap(_.name),
         member = admin.flatMap(_.member),
         role = "roles/iam.serviceAccountKeyAdmin"
@@ -30,7 +30,7 @@ final class ServiceAccountKey(
     }
 
   val key: Output[Key] =
-    Key(s"$id-key", KeyArgs(
+    Key(Names.serviceAccountKeyName(id), KeyArgs(
       serviceAccountId = account.flatMap(_.name),
       privateKeyType = "TYPE_GOOGLE_CREDENTIALS_FILE"
     ), CustomResourceOptions(

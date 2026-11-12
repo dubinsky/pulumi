@@ -16,7 +16,7 @@ final class ServiceAccount(
   val account: Output[Account] =
     for
       projectId <- project.project.projectId
-      result <- Account(s"serviceAccount:$id@$projectId", AccountArgs(
+      result <- Account(Names.serviceAccountPulumiName(id, projectId), AccountArgs(
         project = projectId,
         accountId = id,
         displayName = displayName,
