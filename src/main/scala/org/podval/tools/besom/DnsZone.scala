@@ -1,7 +1,6 @@
 package org.podval.tools.besom
 
-import besom.{Context, Output, opts}
-import besom.internal.SpecResourceAlias
+import besom.{Context, Output}
 import besom.api.cloudflare.{DnsRecord, DnsRecordArgs, Ruleset, RulesetArgs, Zone, ZoneArgs, ZoneDnssec, ZoneDnssecArgs,
   ZoneSetting, ZoneSettingArgs}
 import besom.api.cloudflare.inputs.{DnsRecordDataArgs, RulesetRuleActionParametersArgs,
@@ -226,16 +225,13 @@ open class DnsZone(
       ttl = ttl,
       priority = priority
     )
+    // Alias and deleteBeforeReplace live in cloudflareReplaceCnameOptions. Google-origin www
+    // is replaceCname = false and stays on cloudflareResourceOptions, with no alias.
     if replaceCname then
       DnsRecord(
         name = Names.replaceCnamePulumiName(domain, name),
         args = args,
-        opts(
-          // Literal, same pin as cloudflareResourceOptions. Besom rejects a val here.
-          version = "6.20.0",
-          aliases = SpecResourceAlias(name = Some(Names.replaceCnameAlias(domain, name))),
-          deleteBeforeReplace = true
-        )
+        opts = cloudflareReplaceCnameOptions(Names.replaceCnameAlias(domain, name))
       )
     else
       DnsRecord(
