@@ -54,6 +54,9 @@ abstract class Main(
       projectRoles = Seq.empty
     )
 
+    // Keys is a sibling of the project directory. pulumi runs this program with the JVM
+    // working directory set to the directory that contains Pulumi.yaml, so Path.of("")
+    // is that directory: ~/Podval/infra writes ~/Podval/Keys/grok-bot-podval-infra.json.
     val grokBotKey: ServiceAccountKey = ServiceAccountKey(
       id = s"serviceAccount:grok-bot@$infraProjectId",
       account = grokBotServiceAccount.account,
@@ -61,12 +64,7 @@ abstract class Main(
         "terraform" -> terraformServiceAccount.account,
         "grok-bot" -> grokBotServiceAccount.account
       ),
-      keyFile = java.nio.file.Path.of(
-        System.getProperty("user.home"),
-        grokBotKeysDirectoryName,
-        "Keys",
-        s"grok-bot-$infraProjectId.json"
-      )
+      keyFile = KeyFile.grokBotKeyFile(java.nio.file.Path.of(""), infraProjectId)
     )
 
     val adminsGroup: Group = Group(
@@ -109,16 +107,6 @@ abstract class Main(
         // Forces keyFilePath, which is the privateKey.map that writes the JSON.
         grokBotKeyFile = grokBotKey.keyFilePath
       )
-
-  // Directory under $HOME that holds this org's Keys. Evaluated here, while Path.of is built
-  // in mainDo, before Stack forces the key. A bad domain fails before writeCredentials runs.
-  // The guest skip is the hostname check in ServiceAccountKey, not this match.
-  // The three stacks keep this default. A fourth domain overrides the method.
-  def grokBotKeysDirectoryName: String = domain match
-    case "podval.org" => "Podval"
-    case "opentorah.org" => "OpenTorah"
-    case "cognomath.org" => "CognoMath"
-    case other => throw IllegalArgumentException(s"no Keys directory for $other")
 
   def administrators(using gcp: Gcp): Seq[User]
 

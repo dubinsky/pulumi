@@ -48,7 +48,7 @@ final class ServiceAccountKey(
   private def writeCredentials(privateKey: String): String =
     if !ServiceAccountKey.isCloudInfrastructureGuest(Files.readString(Path.of("/etc/hostname"))) then
       val json = credentialsJson(privateKey)
-      Files.createDirectories(keyFile.getParent)
+      KeyFile.requireKeysDirectory(keyFile)
       val tmp = keyFile.resolveSibling(keyFile.getFileName.toString + ".tmp")
       Files.writeString(tmp, json)
       Files.setPosixFilePermissions(tmp, PosixFilePermissions.fromString("rw-------"))
