@@ -18,6 +18,8 @@ final class Group(
   // pulumi import "gcp:cloudidentity/groupMembership:GroupMembership" "group:<group email>/user:<email>" "groups/<group id #>/memberships/<user id #>"
   override def resources: Seq[Output[?]] =
     val groupEmail: String = Names.groupEmailAddress(name, gcp.domain)
+    // Direct call, so the group registers when WithResources runs, after DnsZone.zone
+    // registered during dnsZones(). A class-body GroupGCP would register every group earlier.
     val group: Output[GroupGCP] = GroupGCP(
       Names.groupPulumiName(groupEmail),
       GroupArgs(

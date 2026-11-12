@@ -1,8 +1,9 @@
 package org.podval.tools.besom
 
 import besom.{Context, Output}
-import org.podval.tools.besom.{Gcp, Project, ServiceAccount}
 
+// A project and the devpod and devpod-vm service accounts. No VM and no disk.
+// Callers are Podval (podval-devpod) and OpenTorah (opentorah-devpod).
 final class DevPod(projectId: String)(using ctx: Context, gcp: Gcp) extends WithResources:
   // podval.org:
   // It seems in July 2024 a VM was created with a 50GB Balanced persistent disk,

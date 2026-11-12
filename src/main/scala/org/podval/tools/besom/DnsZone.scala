@@ -25,6 +25,7 @@ object DnsZone:
   )(using Context, CloudFlare): DnsZone =
     DnsZone(domain = domain, www = canonical, alias = true)
 
+/** Open for `PodvalOrgZone`, which passes constructor arguments and does not read them. */
 open class DnsZone(
   domain: String,
   www: String,
@@ -52,6 +53,8 @@ open class DnsZone(
 
   private val zoneId: Output[ResourceId] = zone.id
 
+  // CognoMath previews with -Xss8m. Eight zones already overflow Besom Result.runM.
+  // Another flatMap per record fails that preview before a diff is printed.
   final override def resources: Seq[Output[?]] =
     // see https://support.google.com/a/answer/16004259
     // old MX records:
@@ -228,6 +231,7 @@ open class DnsZone(
         name = Names.replaceCnamePulumiName(domain, name),
         args = args,
         opts(
+          // Literal, same pin as cloudflareResourceOptions. Besom rejects a val here.
           version = "6.20.0",
           aliases = SpecResourceAlias(name = Some(Names.replaceCnameAlias(domain, name))),
           deleteBeforeReplace = true

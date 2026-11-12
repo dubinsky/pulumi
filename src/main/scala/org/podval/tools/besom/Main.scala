@@ -78,6 +78,8 @@ abstract class Main(
       organizationRoles = organizationAdminsGroupOrganizationRoles
     )
 
+    // Stack receives these Outputs. One built inside flatMap stays in the graph only by being here.
+    // Main calls WithResources once here, after groups() and dnsZones() have already run.
     val resources: Seq[Output[?]] = Seq(
       gcp.provider,
       cloudFlare.provider
@@ -104,10 +106,13 @@ abstract class Main(
         billingAccount = gcp.billingAccountId,
         directoryCustomer = gcp.directoryCustomerId,
         cloudFlareAccount = cloudFlare.accountId,
+        // Forces keyFilePath, which is the privateKey.map that writes the JSON.
         grokBotKeyFile = grokBotKey.keyFilePath
       )
 
-  // Directory under $HOME that holds this org's Keys. The guest does not write the key file.
+  // Directory under $HOME that holds this org's Keys. Evaluated here, while Path.of is built
+  // in mainDo, before Stack forces the key. A bad domain fails before writeCredentials runs.
+  // The guest skip is the hostname check in ServiceAccountKey, not this match.
   private def orgHome: String = domain match
     case "podval.org" => "Podval"
     case "opentorah.org" => "OpenTorah"
@@ -130,6 +135,7 @@ abstract class Main(
     gcp: Gcp
   ): Seq[Group]
 
+  // Stays Seq[WithResources]. AlterRebbe appends its raw Output inside its own resources.
   def resources(infraProject: Project)(using
     ctx: Context,
     gcp: Gcp

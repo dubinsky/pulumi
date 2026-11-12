@@ -10,6 +10,7 @@ final class Bucket(
   project: Project,
   name: NonEmptyString,
   location: String,
+  // Spelled storageClas. A named argument uses this parameter name. The value is BucketArgs.storageClass.
   storageClas: String = "STANDARD",
   forceDestroy: Boolean = false,
   notFoundPage: Option[String] = None,
@@ -18,12 +19,15 @@ final class Bucket(
 )(using ctx: Context) extends WithResources:
   val bucket: Output[BucketGCP] = BucketGCP(name, BucketArgs(
     project = project.project.projectId,
+    // Pulumi name and GCS name are this same string. state.$domain has no type prefix.
     name = name, // TODO do I need this?
     storageClass = storageClas,
     location = location,
+    // Independent of isPublic. Public reads are the BucketIam binding.
     publicAccessPrevention = "inherited",
     uniformBucketLevelAccess = true,
     forceDestroy = forceDestroy,
+    // notFoundPage only. Games still has a TODO for mainPageSuffix; this library does not set it.
     website = notFoundPage.map(notFoundPage => BucketWebsiteArgs(
       notFoundPage = notFoundPage
     ))

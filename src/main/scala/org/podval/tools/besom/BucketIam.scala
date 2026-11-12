@@ -3,7 +3,11 @@ package org.podval.tools.besom
 import besom.{Context, Output}
 import besom.api.gcp.storage.{BucketIamMember, BucketIamMemberArgs}
 
-// pulumi import "gcp:storage/bucketIAMMember:BucketIAMMember" "<bucket name>/<role>/<member>" "b/<bucket name> roles/<role> <member>"
+// Pulumi name is $bucketName/$principalResourceName/role:$role.
+// Non-Account (allUsers, user, group): the name segment and member are the same string.
+// pulumi import "gcp:storage/bucketIAMMember:BucketIAMMember" "<bucket>/<member>/role:<role>" "b/<bucket> roles/<role> <member>"
+// Account: the name segment is serviceAccount:$id@$projectId. member is principalMember, not that segment.
+// pulumi import "gcp:storage/bucketIAMMember:BucketIAMMember" "<bucket>/serviceAccount:<id>@<project id>/role:<role>" "b/<bucket> roles/<role> serviceAccount:<id>@<project id>.iam.gserviceaccount.com"
 final class BucketIam[A: Principal](
   bucket: Bucket,
   principal: Output[A],
