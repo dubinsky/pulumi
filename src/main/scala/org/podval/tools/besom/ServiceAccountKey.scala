@@ -46,8 +46,9 @@ final class ServiceAccountKey(
 
   // Write on every machine, including the cloud-infrastructure guest. That copy is redundant:
   // the copy script places the desktop grok-bot-<project>.json on the guest as
-  // terraform-<project>.json, which .envrc uses. This library does not read the file it writes.
-  // Pulumi authenticates with GOOGLE_CREDENTIALS from .envrc.
+  // terraform-<project>.json, which .envrc uses. This library reads the file only to compare
+  // contents and skip an unchanged write. Pulumi itself authenticates with GOOGLE_CREDENTIALS
+  // from .envrc, never with this file.
   // Leave the file untouched when it already holds this JSON.
   private def writeCredentials(privateKey: String): String =
     val json = credentialsJson(privateKey)
