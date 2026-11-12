@@ -112,9 +112,13 @@ abstract class Main(
 
   // Directory under $HOME that holds this org's Keys. Evaluated here, while Path.of is built
   // in mainDo, before Stack forces the key. A bad domain fails before writeCredentials runs.
-  // The guest skip is the hostname check in ServiceAccountKey, not the directory match.
+  // The guest skip is the hostname check in ServiceAccountKey, not this match.
   // The three stacks keep this default. A fourth domain overrides the method.
-  def grokBotKeysDirectoryName: String = Names.grokBotKeysDirectoryName(domain)
+  def grokBotKeysDirectoryName: String = domain match
+    case "podval.org" => "Podval"
+    case "opentorah.org" => "OpenTorah"
+    case "cognomath.org" => "CognoMath"
+    case other => throw IllegalArgumentException(s"no Keys directory for $other")
 
   def administrators(using gcp: Gcp): Seq[User]
 

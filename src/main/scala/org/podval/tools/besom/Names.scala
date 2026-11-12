@@ -234,12 +234,3 @@ private[besom] object Names:
 
   def userResourceName(localPart: String, domain: String): String =
     s"user:${userEmail(localPart, domain)}"
-
-  // Not a Pulumi name. Main.grokBotKeysDirectoryName delegates here so a test can lock the match.
-  // A test subclass of Main cannot be compiled: Besom is compileOnly, and the abstract members
-  // take besom.Context. Main calls this from Path.of in mainDo, before Stack forces the key.
-  def grokBotKeysDirectoryName(domain: String): String = domain match
-    case "podval.org" => "Podval"
-    case "opentorah.org" => "OpenTorah"
-    case "cognomath.org" => "CognoMath"
-    case other => throw IllegalArgumentException(s"no Keys directory for $other")
