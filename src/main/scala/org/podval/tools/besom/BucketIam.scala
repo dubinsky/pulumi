@@ -14,10 +14,10 @@ final class BucketIam[A: Principal](
       bucketName <- bucket.bucket.name
       principalResourceName <- principal.principalResourceName
       result <- BucketIamMember(
-        s"$bucketName/$principalResourceName/role:$role", BucketIamMemberArgs(
+        Names.bucketIamName(bucketName, principalResourceName, role), BucketIamMemberArgs(
           bucket = bucketName,
           member = principal.principalMember,
-          role = s"roles/$role"
+          role = Names.iamRole(role)
         ), gcpResourceOptions()
       )
     yield result
