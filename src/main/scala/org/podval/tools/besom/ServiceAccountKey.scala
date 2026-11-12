@@ -38,13 +38,15 @@ final class ServiceAccountKey(
     ), gcpServiceAccountKeyOptions(keyAdminMembers))
 
   // Derived from the secret, so Pulumi treats the path as secret too. The value is only the path.
+  // The export grokBotKeyFile forces this map.
   val keyFilePath: Output[String] =
     key.flatMap(_.privateKey).map(writeCredentials)
 
   override def resources: Seq[Output[?]] = keyAdminMembers :+ key
 
+  // The guest skip is this hostname comparison and nothing else. A missing /etc/hostname throws.
   private def writeCredentials(privateKey: String): String =
-    if !onCloudInfrastructureGuest then
+    if !ServiceAccountKey.isCloudInfrastructureGuest(Files.readString(Path.of("/etc/hostname"))) then
       val json = credentialsJson(privateKey)
       Files.createDirectories(keyFile.getParent)
       val tmp = keyFile.resolveSibling(keyFile.getFileName.toString + ".tmp")
@@ -52,9 +54,6 @@ final class ServiceAccountKey(
       Files.setPosixFilePermissions(tmp, PosixFilePermissions.fromString("rw-------"))
       Files.move(tmp, keyFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
     keyFile.toString
-
-  private def onCloudInfrastructureGuest: Boolean =
-    Files.readString(Path.of("/etc/hostname")).trim == "cloud-infrastructure"
 
   private def credentialsJson(privateKey: String): String =
     val trimmed = privateKey.trim
@@ -64,3 +63,8 @@ final class ServiceAccountKey(
     if !decoded.contains("\"client_email\"") || !decoded.contains("\"private_key\"") then
       throw IllegalArgumentException("service account key was not a credentials JSON file")
     if decoded.endsWith("\n") then decoded else decoded + "\n"
+
+// hostname.trim == "cloud-infrastructure". The caller passes the /etc/hostname text through.
+private[besom] object ServiceAccountKey:
+  def isCloudInfrastructureGuest(hostname: String): Boolean =
+    hostname.trim == "cloud-infrastructure"
