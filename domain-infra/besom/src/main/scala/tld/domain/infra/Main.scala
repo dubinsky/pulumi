@@ -1,29 +1,38 @@
 package tld.domain.infra
 
-import besom.api.gcp.cloudidentity.Group
-import besom.api.gcp.organizations.Project
-import besom.api.gcp.serviceAccount.Account
-import besom.api.gcp.storage.Bucket
-import besom.internal.Exports
-import besom.{Context, Output, Pulumi, Stack}
-import org.podval.tools.besom.Builder
+import besom.Context
+import org.podval.tools.besom.{CloudFlare, DnsZone, Gcp, Group, Project, User, WithResources}
 
-object MainBesom:
-  private val infraProjectServiceNames: Seq[String] = Seq(
-    "cloudbilling"        , // "Cloud Billing API"
-    "cloudidentity"       , //
+// Subclass Main and fill the hooks. This object does not define main.
+// Main.main is Pulumi.run, and application.mainClass names this object.
+object Main extends org.podval.tools.besom.Main(
+  domain = "domain.tld",
+  infraProjectId = "domain-infra",
+  infraProjectName = "Domain Cloud Infrastructure",
+  stateBucketLocation = "us-east1",
+  cloudFlareAccountId = "cloudflare-account-id"
+):
+  // domain.tld is not in the default match, which throws at the start of mainDo.
+  // Override the directory. A run is not how you discover the match.
+  override def grokBotKeysDirectoryName: String = "Domain"
+
+  override def administrators(using gcp: Gcp): Seq[User] = Seq(User.user("admin"))
+
+  override val infraProjectServiceNames: Seq[String] = Seq(
+    "cloudbilling", // "Cloud Billing API"
+    "cloudidentity",
     "cloudresourcemanager", // "Cloud Resource Manager API" for project operations
-    "iam"                 , // "Identity and Access Management (IAM) API" for Service Account creation
-    "iamcredentials"      , // "IAM Service Account Credentials API"
-    "logging"             , //
-    "monitoring"          , //
-    "serviceusage"        , // "Service Usage API" for listing/enabling/disabling services
-    "storage"             , //
-    "storage-api"         , //
-    "storage-component"     //
+    "iam", // "Identity and Access Management (IAM) API" for Service Account creation
+    "iamcredentials", // "IAM Service Account Credentials API"
+    "logging",
+    "monitoring",
+    "serviceusage", // "Service Usage API" for listing/enabling/disabling services
+    "storage",
+    "storage-api",
+    "storage-component"
   )
 
-  private val terraformServiceAccountOrganizationRoles: Seq[String] = Seq(
+  override val terraformServiceAccountOrganizationRoles: Seq[String] = Seq(
     "billing.admin",
     "compute.admin",
     "iam.organizationRoleAdmin",
@@ -36,7 +45,7 @@ object MainBesom:
     "storage.admin"
   )
 
-  private val organizationAdminsGroupOrganizationRoles: Seq[String] = Seq(
+  override val organizationAdminsGroupOrganizationRoles: Seq[String] = Seq(
     "billing.admin",
     "cloudasset.owner",
     "iam.organizationRoleViewer",
@@ -56,47 +65,28 @@ object MainBesom:
     "storage.admin"
   )
 
-  def main(args: Array[String]): Stack = Pulumi.run(mainDo)
+  // Main builds gcp-organization-admins. Additional groups go here.
+  override def groups(using
+    ctx: Context,
+    gcp: Gcp
+  ): Seq[Group] = Seq.empty
 
-  private def mainDo(using context: Context): Stack =
-    val builder: Builder = new Builder(
-      context = context,
+  override def dnsZones(using
+    ctx: Context,
+    cloudFlare: CloudFlare
+  ): Seq[DnsZone] = Seq(
+    DnsZone(
       domain = "domain.tld",
-      billingAccountDisplayName = "My Billing Account"
+      www = "example.github.io",
+      proxied = true,
+      alwaysUseHttps = true
     )
+  )
 
-    val infraProject: Output[Project] = builder.project(
-      id = "domain-infra",
-      displayName = "Domain Cloud Infrastructure"
-    )
-
-    val stateBucket: Output[Bucket] = builder.bucket(
-      project = infraProject,
-      name = "state.domain.tld",
-      location = "us-east1"
-    )
-
-    val terraformServiceAccount: Output[Account] = builder.serviceAccount(
-      project = infraProject,
-      id = "terraform",
-      displayName = "terraform",
-      description = "Service Account for Terraform"
-    )
-
-    val organizationAdminsGroup: Output[Group] = builder.group(
-      "gcp-organization-admins",
-      "gcp-organization-admins",
-      "Organization administrators have access to administer all resources belonging to the organization"
-    )
-
-    builder.exports(Stack(
-      infraProject,
-      builder.projectServices(infraProject, infraProjectServiceNames*),
-      stateBucket,
-      terraformServiceAccount,
-      builder.organizationRoles(terraformServiceAccount, terraformServiceAccountOrganizationRoles*),
-      organizationAdminsGroup,
-      builder.organizationRoles(organizationAdminsGroup, organizationAdminsGroupOrganizationRoles*),
-      builder.groupOwners(organizationAdminsGroup, builder.user("admin")),
-      classroomTeachersGroup
-    ))
+  // WithResources forces child Outputs, including one built inside flatMap.
+  // A hand-built resource has to pass gcpResourceOptions() or cloudflareResourceOptions().
+  // Version literals stay inline in those methods. Besom rejects a val in CustomResourceOptions.
+  override def resources(infraProject: Project)(using
+    ctx: Context,
+    gcp: Gcp
+  ): Seq[WithResources] = Seq.empty

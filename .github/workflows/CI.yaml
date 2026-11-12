@@ -22,3 +22,6 @@ jobs:
 
       - name: Build and test
         run: ./gradlew build
+
+      - name: Compile the sample
+        run: ./gradlew -p domain-infra/besom compileScala

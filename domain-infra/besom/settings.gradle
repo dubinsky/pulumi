@@ -3,13 +3,34 @@ pluginManagement {
     mavenCentral()
     gradlePluginPortal()
   }
+  // String path: a File would call Settings.includeBuild (not a plugin build).
+  // A parent build has already included this directory and Gradle rejects a second include.
+  // CI has no sibling podval-gradle; 0.4.0 then comes from Maven.
+  if (gradle.parent == null) {
+    final String conventionsDir =
+      providers.gradleProperty('podvalGradleDir').getOrElse('../../../podval-gradle')
+    if (file(conventionsDir).isDirectory() && file("${conventionsDir}/settings.gradle").isFile()) {
+      includeBuild conventionsDir
+    }
+  }
+}
+
+plugins {
+  id 'org.podval.conventions.settings' version '0.4.0'
+}
+
+podvalSettings {
+  acceptVersionIf { version ->
+    // Besom stable line: 9.0.0-core.0.5, 6.20.0-core.0.5. Not 1.0.0-legacy, not 0.017.
+    version ==~ /[0-9]+(\.[0-9]+)*-core\.[0-9]+(\.[0-9]+)*/
+  }
 }
 
 dependencyResolutionManagement {
   repositories {
     // according to pulumi:
     maven { // The google mirror is less flaky than mavenCentral()
-      url("https://maven-central.storage-download.googleapis.com/maven2/")
+      url = 'https://maven-central.storage-download.googleapis.com/maven2/'
     }
 
     mavenCentral()
@@ -24,3 +45,10 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = 'domain-infrastructure'
+
+// This sample lives in the repository. includeBuild of the repo root substitutes
+// org.podval.tools:org.podval.tools.pulumi. The root build does not include this sample.
+final File pulumiDir = file(providers.gradleProperty('pulumiDir').getOrElse('../..'))
+if (pulumiDir.isDirectory() && new File(pulumiDir, 'settings.gradle').isFile()) {
+  includeBuild(pulumiDir)
+}

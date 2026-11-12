@@ -1,8 +1,8 @@
 plugins {
   id 'idea'
-  id 'com.github.ben-manes.versions' version '0.44.0'
   id 'scala'
   id 'application'
+  id 'org.podval.conventions'
 }
 
 description = 'Domain Infrastructure'
@@ -10,11 +10,12 @@ description = 'Domain Infrastructure'
 application.mainClass = 'tld.domain.infra.Main'
 
 dependencies {
-  implementation 'org.scala-lang:scala3-library_3:3.6.2'
-  implementation 'org.podval.tools:org.podval.tools.pulumi:0.2.0'
+  // The library's Besom jars are compileOnly. This project brings its own.
+  implementation 'org.podval.tools:org.podval.tools.pulumi:0.6.0'
 
-  implementation 'org.virtuslab:besom-core_3:0.3.2'
-  implementation 'org.virtuslab:besom-gcp_3:7.26.0-core.0.3'
+  implementation 'org.virtuslab:besom-core_3:0.5.2'
+  implementation 'org.virtuslab:besom-gcp_3:9.0.0-core.0.5'
+  implementation 'org.virtuslab:besom-cloudflare_3:6.20.0-core.0.5'
 }
 
 idea {
@@ -27,15 +28,8 @@ idea {
 }
 
 // There is no Java in the project :)
-project.gradle.startParameter.excludedTaskNames.add('compileJava')
+podval.compileJavaEnabled = false
 
-tasks.withType(ScalaCompile).configureEach {
-  scalaCompileOptions.with {
-    additionalParameters = [
-      '-new-syntax',
-      '-feature',
-      '-language:strictEquality',
-      '-source:future'
-    ]
-  }
-}
+// One zone, so this build does not set -Xss8m. CognoMath sets
+// applicationDefaultJvmArgs = ['-Xss8m'] because eight DnsZones already
+// overflow Besom Result.runM.
