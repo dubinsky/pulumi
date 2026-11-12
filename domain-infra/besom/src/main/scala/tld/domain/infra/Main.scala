@@ -5,6 +5,9 @@ import org.podval.tools.besom.{CloudFlare, DnsZone, Gcp, Group, Project, User, W
 
 // Subclass Main and fill the hooks. This object does not define main.
 // Main.main is Pulumi.run, and application.mainClass names this object.
+// The grok-bot key file is Keys/grok-bot-$infraProjectId.json beside the directory
+// that contains Pulumi.yaml. pulumi runs this program with that directory as the
+// JVM working directory. Keys is not created if it is missing.
 object Main extends org.podval.tools.besom.Main(
   domain = "domain.tld",
   infraProjectId = "domain-infra",
@@ -12,10 +15,6 @@ object Main extends org.podval.tools.besom.Main(
   stateBucketLocation = "us-east1",
   cloudFlareAccountId = "cloudflare-account-id"
 ):
-  // domain.tld is not in the default match, which throws at the start of mainDo.
-  // Override the directory. A run is not how you discover the match.
-  override def grokBotKeysDirectoryName: String = "Domain"
-
   override def administrators(using gcp: Gcp): Seq[User] = Seq(User.user("admin"))
 
   override val infraProjectServiceNames: Seq[String] = Seq(

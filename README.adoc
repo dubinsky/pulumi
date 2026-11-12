@@ -243,6 +243,16 @@ as the main class. That object extends `org.podval.tools.besom.Main` and does no
 (`Main.main` is `Pulumi.run`).
 `pulumi` detects the Gradle build file and runs the application with `gradlew run --console=plain`.
 
+That run uses the project directory, the directory that contains `Pulumi.yaml`, as the program's working directory.
+Besom starts `gradlew run --console=plain` there, and Gradle's `run` task starts the application JVM
+with the same directory (`workingDir` defaults to the project directory, including when the Gradle
+daemon itself was started somewhere else).
+The library writes the grok-bot JSON key beside that directory: the parent of `Path.of("").toAbsolutePath`,
+then `Keys`, then `grok-bot-$infraProjectId.json`.
+A checkout at `~/Podval/infra` writes `~/Podval/Keys/grok-bot-podval-infra.json`.
+`~/OpenTorah/infra` and `~/CognoMath/infra` resolve the same way.
+`Keys` is not created if it is missing; the run fails and names that path.
+
 The sample is that one Scala file, in
 link:domain-infra/besom/src[domain-infra/besom/src].
 
