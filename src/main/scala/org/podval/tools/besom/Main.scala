@@ -63,7 +63,7 @@ abstract class Main(
       ),
       keyFile = java.nio.file.Path.of(
         System.getProperty("user.home"),
-        orgHome,
+        grokBotKeysDirectoryName,
         "Keys",
         s"grok-bot-$infraProjectId.json"
       )
@@ -113,7 +113,8 @@ abstract class Main(
   // Directory under $HOME that holds this org's Keys. Evaluated here, while Path.of is built
   // in mainDo, before Stack forces the key. A bad domain fails before writeCredentials runs.
   // The guest skip is the hostname check in ServiceAccountKey, not this match.
-  private def orgHome: String = domain match
+  // The three stacks keep this default. A fourth domain overrides the method.
+  def grokBotKeysDirectoryName: String = domain match
     case "podval.org" => "Podval"
     case "opentorah.org" => "OpenTorah"
     case "cognomath.org" => "CognoMath"
