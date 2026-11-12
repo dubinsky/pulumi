@@ -13,8 +13,6 @@ import besom.api.gcp.serviceaccount.IamMember
 // val there: NonEmptyString allows only a constant string or a string interpolation.
 val GcpPluginVersion: String = "9.0.0"
 
-// AlterRebbe's artifact-registry agent IamMember skips this, so that binding can drift off 9.0.0.
-// Its role is "roles/storage.objectViewer". ProjectIam would prepend "roles/" again.
 def gcpResourceOptions(ignoreChanges: String*): CustomResourceOptions =
   CustomResourceOptions(
     version = "9.0.0",

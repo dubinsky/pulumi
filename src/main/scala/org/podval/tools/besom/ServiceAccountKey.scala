@@ -10,7 +10,7 @@ import java.util.Base64
 
 // JSON key for the cloud-infrastructure guest. terraform@ creates it, so terraform@ needs key admin on this
 // account before the key resource. The guest account needs the same role so its own preview can read the key.
-// The provider returns the JSON base64-encoded. The desktop file is the decoded credentials file.
+// The provider returns the JSON base64-encoded. The file written here is the decoded credentials file.
 final class ServiceAccountKey(
   id: String,
   account: Output[Account],
@@ -44,16 +44,23 @@ final class ServiceAccountKey(
 
   override def resources: Seq[Output[?]] = keyAdminMembers :+ key
 
-  // The guest skip is this hostname comparison and nothing else. A missing /etc/hostname throws.
+  // Write on every machine, including the cloud-infrastructure guest. That copy is redundant:
+  // the copy script places the desktop grok-bot-<project>.json on the guest as
+  // terraform-<project>.json, which .envrc uses. This library does not read the file it writes.
+  // Pulumi authenticates with GOOGLE_CREDENTIALS from .envrc.
+  // Leave the file untouched when it already holds this JSON.
   private def writeCredentials(privateKey: String): String =
-    if !ServiceAccountKey.isCloudInfrastructureGuest(Files.readString(Path.of("/etc/hostname"))) then
-      val json = credentialsJson(privateKey)
-      Files.createDirectories(keyFile.getParent)
+    val json = credentialsJson(privateKey)
+    KeyFile.requireKeysDirectory(keyFile)
+    if KeyFile.shouldWriteCredentials(existingCredentials(keyFile), json) then
       val tmp = keyFile.resolveSibling(keyFile.getFileName.toString + ".tmp")
       Files.writeString(tmp, json)
       Files.setPosixFilePermissions(tmp, PosixFilePermissions.fromString("rw-------"))
       Files.move(tmp, keyFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
     keyFile.toString
+
+  private def existingCredentials(path: Path): Option[String] =
+    if Files.isRegularFile(path) then Some(Files.readString(path)) else None
 
   private def credentialsJson(privateKey: String): String =
     val trimmed = privateKey.trim
@@ -63,8 +70,3 @@ final class ServiceAccountKey(
     if !decoded.contains("\"client_email\"") || !decoded.contains("\"private_key\"") then
       throw IllegalArgumentException("service account key was not a credentials JSON file")
     if decoded.endsWith("\n") then decoded else decoded + "\n"
-
-// hostname.trim == "cloud-infrastructure". The caller passes the /etc/hostname text through.
-private[besom] object ServiceAccountKey:
-  def isCloudInfrastructureGuest(hostname: String): Boolean =
-    hostname.trim == "cloud-infrastructure"

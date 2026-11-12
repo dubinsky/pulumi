@@ -100,6 +100,17 @@ final class LogicalNamesTest extends AnyFunSuite:
     ) == "project:cognomath-firebase/user:nina.dubinsky@cognomath.org/role:identitytoolkit.viewer")
     assert(Names.iamRole("identitytoolkit.viewer") == "roles/identitytoolkit.viewer")
 
+  test("artifact-registry service agent member is the ProjectIam name segment"):
+    val member = "serviceAccount:service-123456789012@gcp-sa-artifactregistry.iam.gserviceaccount.com"
+    val agent = ServiceAgent("123456789012", "artifactregistry")
+    assert(agent.member == member)
+    assert(agent.resourceName == member)
+    assert(Names.serviceAgentMember("123456789012", "artifactregistry") == member)
+    assert(Names.serviceAgentResourceName("123456789012", "artifactregistry") == member)
+    assert(Names.projectIamName("alter-rebbe-2", member, "storage.objectViewer") ==
+      "project:alter-rebbe-2/serviceAccount:service-123456789012@gcp-sa-artifactregistry.iam.gserviceaccount.com/role:storage.objectViewer")
+    assert(Names.iamRole("storage.objectViewer") == "roles/storage.objectViewer")
+
   test("BucketIam treasure-hunt on cognomath-games"):
     assert(Names.serviceAccountPulumiName("treasure-hunt", "cognomath-games") ==
       "serviceAccount:treasure-hunt@cognomath-games")

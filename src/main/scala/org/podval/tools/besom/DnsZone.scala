@@ -28,10 +28,8 @@ object DnsZone:
   * `proxied` does not imply Always Use HTTPS. Google origin emits HTTPS `on` without either flag.
   * Extra CNAMEs stay DNS-only. TTL `1` is Cloudflare automatic.
   * `DnsZone.BUCKET` (`c.storage.googleapis.com`) is a CNAME target for website buckets, not an apex mode.
-  *
-  * Open for `PodvalOrgZone`, which passes constructor arguments and does not read them.
   */
-open class DnsZone(
+class DnsZone(
   domain: String,
   www: String,
   cnames: Seq[(String, String)] = Seq.empty,
