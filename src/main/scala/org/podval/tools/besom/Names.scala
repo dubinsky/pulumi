@@ -149,6 +149,8 @@ private[besom] object Names:
   inline def bucketIamName(bucketName: String, principalResourceName: String, role: String): String =
     s"$bucketName/$principalResourceName/role:$role"
 
+  // OrganizationIam, ProjectIam, and BucketIam prepend roles/. Stacks pass unprefixed ids.
+  // ServiceAccountKey and AlterRebbe's agent binding pass a full roles/… string and do not call this.
   def iamRole(role: String): String = s"roles/$role"
 
   def groupEmailAddress(name: String, domain: String): String = s"$name@$domain"

@@ -7,8 +7,13 @@ import besom.api.gcp.organizations.{GetBillingAccountArgs, GetOrganizationArgs, 
 
 // besom-gcp_3:9.0.0-core.0.5 plugin.json. Resources use the default provider, so the
 // version has to be on each of them; the provider resource option does not cover them.
+// This val is the invoke version. It changes in the same commit as the "9.0.0" literal.
+// CustomResourceOptions takes that literal: Besom rejects a val. This build does not apply
+// besom-compiler-plugin, so the infra compile is what checks the literal.
 val GcpPluginVersion: String = "9.0.0"
 
+// AlterRebbe's artifact-registry agent IamMember does not call this and passes a full roles/…
+// string. That binding can drift off 9.0.0. ProjectIam would prepend roles/ a second time.
 def gcpResourceOptions(ignoreChanges: String*): CustomResourceOptions =
   CustomResourceOptions(
     version = "9.0.0",

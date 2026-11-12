@@ -7,9 +7,12 @@ final class User(val name: String, val domain: String):
   def resourceName: String = Names.userResourceName(name, domain) // TODO unfold
   
 object User:
+  // No caller. Stays: a Gmail principal is still a User, just not one any stack builds.
   def gmail(name: String): User = User(name, "gmail.com")
 
+  // Group owners and members. Podval, OpenTorah, and CognoMath all call this. Returns User.
   def user(name: String)(using gcp: Gcp): User = User(name, gcp.domain)
 
+  // ProjectIam needs Output[A]. Firebase calls this for nina.dubinsky and eric.karnowski.
   def userOutput(name: String)(using gcp: Gcp): Output[User] = Output(User(name, gcp.domain))
 

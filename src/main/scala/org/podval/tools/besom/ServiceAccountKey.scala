@@ -25,6 +25,7 @@ final class ServiceAccountKey(
       IamMember(Names.serviceAccountKeyAdminName(id, label), IamMemberArgs(
         serviceAccountId = account.flatMap(_.name),
         member = admin.flatMap(_.member),
+        // Full role id. Names.iamRole would prepend roles/ again.
         role = "roles/iam.serviceAccountKeyAdmin"
       ), gcpResourceOptions())
     }
@@ -34,6 +35,7 @@ final class ServiceAccountKey(
       serviceAccountId = account.flatMap(_.name),
       privateKeyType = "TYPE_GOOGLE_CREDENTIALS_FILE"
     ), CustomResourceOptions(
+      // Literal, same pin as gcpResourceOptions. GcpPluginVersion is the invoke version.
       version = "9.0.0",
       dependsOn = keyAdminMembers
     ))

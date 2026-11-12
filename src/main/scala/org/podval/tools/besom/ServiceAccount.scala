@@ -13,6 +13,8 @@ final class ServiceAccount(
   projectRoles: Seq[String]
 )(using ctx: Context, gcp: Gcp) extends WithResources:
 
+  // Registers inside the flatMap, once project.project.projectId is known.
+  // Lifting Account(...) out changes that Output graph. Main and Bucket read this value.
   val account: Output[Account] =
     for
       projectId <- project.project.projectId
