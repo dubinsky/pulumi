@@ -79,7 +79,7 @@ open class DnsZone(
         record(spec.typ, spec.name, spec.content, proxied = spec.proxied, replaceCname = spec.replaceCname)
 
     // Alias, then www == GOOGLEHOSTED. Records, the host redirect, and Always Use HTTPS share this value.
-    val mode: Names.ApexMode = Names.apexMode(alias, www)
+    val mode: ApexMode = Names.apexMode(alias, www)
 
     // 192.0.2.1 is TEST-NET-1; orange-cloud so Single Redirects can run.
     val apexAndWww: Seq[Output[DnsRecord]] =

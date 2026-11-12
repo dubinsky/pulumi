@@ -68,12 +68,6 @@ private[besom] object Names:
   def pathRuleDescription(path: String, to: String): String =
     s"$path -> $to"
 
-  enum ApexMode derives CanEqual:
-    case Alias
-    case GoogleOrigin
-    case Ordinary
-
-  // Alias is tested first. Google origin is www == ghs.googlehosted.com after that, not a ghs substring.
   def apexMode(alias: Boolean, www: String): ApexMode =
     if alias then ApexMode.Alias
     else if www == googleHostedCname then ApexMode.GoogleOrigin
