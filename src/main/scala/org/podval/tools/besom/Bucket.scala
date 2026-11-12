@@ -10,8 +10,7 @@ final class Bucket(
   project: Project,
   name: NonEmptyString,
   location: String,
-  // Spelled storageClas. A named argument uses this parameter name. The value is BucketArgs.storageClass.
-  storageClas: String = "STANDARD",
+  storageClass: String = "STANDARD",
   forceDestroy: Boolean = false,
   notFoundPage: Option[String] = None,
   isPublic: Boolean = false,
@@ -21,7 +20,7 @@ final class Bucket(
     project = project.project.projectId,
     // Pulumi name and GCS name are this same string. state.$domain has no type prefix.
     name = name, // TODO do I need this?
-    storageClass = storageClas,
+    storageClass = storageClass,
     location = location,
     // Independent of isPublic. Public reads are the BucketIam binding.
     publicAccessPrevention = "inherited",
