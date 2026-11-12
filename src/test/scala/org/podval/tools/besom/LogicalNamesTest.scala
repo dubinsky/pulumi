@@ -209,6 +209,26 @@ final class LogicalNamesTest extends AnyFunSuite:
       )
     ))
 
+  test("replaceCname selects the alias options; a plain CNAME does not"):
+    val alias = Names.apexAndWwwRecords("podval.dev", "www.podval.org", proxied = false, ApexMode.Alias)
+    assert(alias.forall(_.replaceCname))
+    assert(alias.map(spec => Names.replaceCnameAlias("podval.dev", spec.name)) == Seq(
+      "dnsRecord:podval.dev-CNAME-@",
+      "dnsRecord:podval.dev-CNAME-www"
+    ))
+    val google = Names.apexAndWwwRecords(
+      "cognomath.org",
+      Names.googleHostedCname,
+      proxied = false,
+      ApexMode.GoogleOrigin
+    )
+    assert(google.map(_.replaceCname) == Seq(true, false))
+    assert(Names.replaceCnameAlias("cognomath.org", "@") == "dnsRecord:cognomath.org-CNAME-@")
+    val ordinary = Names.apexAndWwwRecords("podval.org", "dubinsky.github.io", proxied = true, ApexMode.Ordinary)
+    assert(ordinary.forall(spec => !spec.replaceCname))
+    assert(!Names.extraCname("nina", "ghs.google.com").replaceCname)
+    assert(!Names.extraCname("blog", "blog.cognomath.org.ghs.googlehosted.com").replaceCname)
+
   test("grok-bot key names for podval-infra"):
     assert(Names.serviceAccountPulumiName("grok-bot", "podval-infra") == "serviceAccount:grok-bot@podval-infra")
     assert(Names.serviceAccountKeyAdminName("serviceAccount:grok-bot@podval-infra", "terraform") ==

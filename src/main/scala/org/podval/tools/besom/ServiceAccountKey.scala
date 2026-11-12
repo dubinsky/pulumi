@@ -1,6 +1,6 @@
 package org.podval.tools.besom
 
-import besom.{Context, CustomResourceOptions, Output}
+import besom.{Context, Output}
 import besom.api.gcp.serviceaccount.{Account, IamMember, IamMemberArgs, Key, KeyArgs}
 
 import java.nio.charset.StandardCharsets
@@ -19,7 +19,8 @@ final class ServiceAccountKey(
 )(using ctx: Context) extends WithResources:
 
   // Register these during preview. A for-comprehension would wait for the account name and the
-  // preview would not show the key. dependsOn still creates the key after key admin is granted.
+  // preview would not show the key. gcpServiceAccountKeyOptions passes these as dependsOn, so the
+  // key is still created after key admin is granted.
   private val keyAdminMembers: Seq[Output[IamMember]] =
     keyAdmins.map { (label, admin) =>
       IamMember(Names.serviceAccountKeyAdminName(id, label), IamMemberArgs(
@@ -34,11 +35,7 @@ final class ServiceAccountKey(
     Key(Names.serviceAccountKeyName(id), KeyArgs(
       serviceAccountId = account.flatMap(_.name),
       privateKeyType = "TYPE_GOOGLE_CREDENTIALS_FILE"
-    ), CustomResourceOptions(
-      // Literal, same pin as gcpResourceOptions. GcpPluginVersion is the invoke version.
-      version = "9.0.0",
-      dependsOn = keyAdminMembers
-    ))
+    ), gcpServiceAccountKeyOptions(keyAdminMembers))
 
   // Derived from the secret, so Pulumi treats the path as secret too. The value is only the path.
   val keyFilePath: Output[String] =

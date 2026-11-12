@@ -4,6 +4,7 @@ import besom.{Context, CustomResourceOptions, InvokeOptions, Output}
 import besom.api.gcp.{Provider, ProviderArgs}
 import besom.api.gcp.organizations.{GetBillingAccountArgs, GetOrganizationArgs, GetOrganizationResult,
   getBillingAccount, getOrganization}
+import besom.api.gcp.serviceaccount.IamMember
 
 // besom-gcp_3:9.0.0-core.0.5 plugin.json. Resources use the default provider, so the
 // version has to be on each of them; the provider resource option does not cover them.
@@ -18,6 +19,16 @@ def gcpResourceOptions(ignoreChanges: String*): CustomResourceOptions =
   CustomResourceOptions(
     version = "9.0.0",
     ignoreChanges = ignoreChanges
+  )
+
+// dependsOn for the service-account key. Not an overload of gcpResourceOptions: the first
+// parameter would compete with ignoreChanges: String*. The "9.0.0" literal is written at
+// this call, the same pin as gcpResourceOptions. GcpPluginVersion is the invoke version.
+// NonEmptyString rejects a val or a version parameter. Key-admin IamMembers stay on gcpResourceOptions().
+def gcpServiceAccountKeyOptions(dependsOn: Seq[Output[IamMember]]): CustomResourceOptions =
+  CustomResourceOptions(
+    version = "9.0.0",
+    dependsOn = dependsOn
   )
 
 def gcpInvokeOptions: InvokeOptions = InvokeOptions(version = Some(GcpPluginVersion))
