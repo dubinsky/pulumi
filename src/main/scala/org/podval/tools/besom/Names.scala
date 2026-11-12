@@ -89,8 +89,8 @@ private[besom] object Names:
 
   private val orangeCloudA: String = "192.0.2.1"
 
-  def apexAndWwwRecords(domain: String, www: String, proxied: Boolean, alias: Boolean): Seq[RecordSpec] =
-    apexMode(alias, www) match
+  def apexAndWwwRecords(domain: String, www: String, proxied: Boolean, mode: ApexMode): Seq[RecordSpec] =
+    mode match
       case ApexMode.Alias =>
         Seq(
           RecordSpec("A", "@", orangeCloudA, proxied = true, replaceCname = true),
@@ -113,11 +113,19 @@ private[besom] object Names:
 
   final case class HostRedirect(hosts: Seq[String], to: String) derives CanEqual
 
-  def hostRedirectFor(alias: Boolean, domain: String, www: String): Option[HostRedirect] =
-    apexMode(alias, www) match
+  def hostRedirectFor(domain: String, www: String, mode: ApexMode): Option[HostRedirect] =
+    mode match
       case ApexMode.Alias => Some(HostRedirect(Seq(domain, s"www.$domain"), www))
       case ApexMode.GoogleOrigin => Some(HostRedirect(Seq(domain), s"www.$domain"))
       case ApexMode.Ordinary => None
+
+  // alias || (www == ghs.googlehosted.com) is mode != Ordinary. "on" unless the zone is ordinary and only proxied.
+  def httpsSetting(proxied: Boolean, alwaysUseHttps: Boolean, mode: ApexMode): Option[String] =
+    val shaped: Boolean = mode != ApexMode.Ordinary
+    if proxied || alwaysUseHttps || shaped then
+      Some(if alwaysUseHttps || shaped then "on" else "off")
+    else
+      None
 
   inline def serviceAccountPulumiName(id: String, projectId: String): String =
     s"serviceAccount:$id@$projectId"

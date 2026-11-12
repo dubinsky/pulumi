@@ -61,13 +61,16 @@ final class LogicalNamesTest extends AnyFunSuite:
     val domain = "podval.dev"
     val to = "www.podval.org"
     val hosts = Seq("podval.dev", "www.podval.dev")
-    assert(Names.hostRedirectFor(alias = true, domain = domain, www = to) ==
+    val mode = Names.apexMode(alias = true, www = to)
+    assert(mode == Names.ApexMode.Alias)
+    assert(Names.hostRedirectFor(domain, to, mode) ==
       Some(Names.HostRedirect(hosts, to)))
     val ruleDescription = Names.hostRuleDescription(hosts, to)
     val rulesetDescription = Names.hostRulesetDescription(domain, to)
     assert(ruleDescription == "podval.dev, www.podval.dev -> www.podval.org")
     assert(rulesetDescription == "podval.dev -> www.podval.org")
-    assert(Names.apexAndWwwRecords(domain, to, proxied = false, alias = true) == Seq(
+    assert(Names.httpsSetting(proxied = false, alwaysUseHttps = false, mode) == Some("on"))
+    assert(Names.apexAndWwwRecords(domain, to, proxied = false, mode) == Seq(
       Names.RecordSpec("A", "@", "192.0.2.1", proxied = true, replaceCname = true),
       Names.RecordSpec("A", "www", "192.0.2.1", proxied = true, replaceCname = true)
     ))
@@ -108,8 +111,10 @@ final class LogicalNamesTest extends AnyFunSuite:
 
   test("google origin cognomath.org www is a DNS-only CNAME"):
     assert(Names.googleHostedCname == "ghs.googlehosted.com")
-    assert(Names.apexMode(alias = false, www = "ghs.googlehosted.com") == Names.ApexMode.GoogleOrigin)
-    assert(Names.apexAndWwwRecords("cognomath.org", "ghs.googlehosted.com", proxied = false, alias = false) == Seq(
+    val mode = Names.apexMode(alias = false, www = "ghs.googlehosted.com")
+    assert(mode == Names.ApexMode.GoogleOrigin)
+    assert(Names.httpsSetting(proxied = false, alwaysUseHttps = false, mode) == Some("on"))
+    assert(Names.apexAndWwwRecords("cognomath.org", "ghs.googlehosted.com", proxied = false, mode) == Seq(
       Names.RecordSpec("A", "@", "192.0.2.1", proxied = true, replaceCname = true),
       Names.RecordSpec("CNAME", "www", "ghs.googlehosted.com", proxied = false, replaceCname = false)
     ))
@@ -117,7 +122,7 @@ final class LogicalNamesTest extends AnyFunSuite:
     assert(Names.replaceCnameAlias("cognomath.org", "@") == "dnsRecord:cognomath.org-CNAME-@")
     assert(Names.recordResourceName("cognomath.org", "CNAME", "www", replaceCname = false) ==
       "dnsRecord:cognomath.org-CNAME-www")
-    assert(Names.hostRedirectFor(alias = false, domain = "cognomath.org", www = "ghs.googlehosted.com") ==
+    assert(Names.hostRedirectFor("cognomath.org", "ghs.googlehosted.com", mode) ==
       Some(Names.HostRedirect(Seq("cognomath.org"), "www.cognomath.org")))
     assert(Names.hostRuleDescription(Seq("cognomath.org"), "www.cognomath.org") == "cognomath.org -> www.cognomath.org")
     assert(Names.hostRulesetDescription("cognomath.org", "www.cognomath.org") == "cognomath.org -> www.cognomath.org")
@@ -132,14 +137,16 @@ final class LogicalNamesTest extends AnyFunSuite:
 
   test("mixed podval.org and alter-rebbe.org extra CNAMEs stay DNS-only"):
     assert(Names.bucketCname == "c.storage.googleapis.com")
-    assert(Names.apexMode(alias = false, www = "dubinsky.github.io") == Names.ApexMode.Ordinary)
-    assert(Names.apexAndWwwRecords("podval.org", "dubinsky.github.io", proxied = true, alias = false) == Seq(
+    val podvalMode = Names.apexMode(alias = false, www = "dubinsky.github.io")
+    assert(podvalMode == Names.ApexMode.Ordinary)
+    assert(Names.httpsSetting(proxied = true, alwaysUseHttps = true, podvalMode) == Some("on"))
+    assert(Names.apexAndWwwRecords("podval.org", "dubinsky.github.io", proxied = true, podvalMode) == Seq(
       Names.RecordSpec("CNAME", "@", "www.podval.org", proxied = true, replaceCname = false),
       Names.RecordSpec("CNAME", "www", "dubinsky.github.io", proxied = true, replaceCname = false)
     ))
     assert(Names.recordResourceName("podval.org", "CNAME", "@", replaceCname = false) == "dnsRecord:podval.org-CNAME-@")
     assert(Names.recordResourceName("podval.org", "CNAME", "www", replaceCname = false) == "dnsRecord:podval.org-CNAME-www")
-    assert(Names.hostRedirectFor(alias = false, domain = "podval.org", www = "dubinsky.github.io").isEmpty)
+    assert(Names.hostRedirectFor("podval.org", "dubinsky.github.io", podvalMode).isEmpty)
     val googleHosted = "ghs.googlehosted.com"
     assertExtra("podval.org", "calendar", googleHosted, "dnsRecord:podval.org-CNAME-calendar")
     assertExtra("podval.org", "docs", googleHosted, "dnsRecord:podval.org-CNAME-docs")
@@ -167,12 +174,13 @@ final class LogicalNamesTest extends AnyFunSuite:
     assertExtra("podval.org", "ssh", "k39.podval.org", "dnsRecord:podval.org-CNAME-ssh")
     assertExtra("podval.org", "sds", "k39.podval.org", "dnsRecord:podval.org-CNAME-sds")
 
-    assert(Names.apexMode(alias = false, www = "opentorah.github.io") == Names.ApexMode.Ordinary)
-    assert(Names.apexAndWwwRecords("alter-rebbe.org", "opentorah.github.io", proxied = true, alias = false) == Seq(
+    val alterRebbeMode = Names.apexMode(alias = false, www = "opentorah.github.io")
+    assert(alterRebbeMode == Names.ApexMode.Ordinary)
+    assert(Names.apexAndWwwRecords("alter-rebbe.org", "opentorah.github.io", proxied = true, alterRebbeMode) == Seq(
       Names.RecordSpec("CNAME", "@", "www.alter-rebbe.org", proxied = true, replaceCname = false),
       Names.RecordSpec("CNAME", "www", "opentorah.github.io", proxied = true, replaceCname = false)
     ))
-    assert(Names.hostRedirectFor(alias = false, domain = "alter-rebbe.org", www = "opentorah.github.io").isEmpty)
+    assert(Names.hostRedirectFor("alter-rebbe.org", "opentorah.github.io", alterRebbeMode).isEmpty)
     assertExtra("alter-rebbe.org", "app", googleHosted, "dnsRecord:alter-rebbe.org-CNAME-app")
     assertExtra("alter-rebbe.org", "store", "c.storage.googleapis.com", "dnsRecord:alter-rebbe.org-CNAME-store")
     assertExtra("alter-rebbe.org", "facsimiles", "c.storage.googleapis.com", "dnsRecord:alter-rebbe.org-CNAME-facsimiles")
@@ -181,12 +189,15 @@ final class LogicalNamesTest extends AnyFunSuite:
     assert(Names.apexMode(alias = true, www = "ghs.googlehosted.com") == Names.ApexMode.Alias)
     assert(Names.apexMode(alias = false, www = "ghs.googlehosted.com") == Names.ApexMode.GoogleOrigin)
     assert(Names.apexMode(alias = false, www = "ghs.google.com") == Names.ApexMode.Ordinary)
-    assert(Names.apexMode(alias = false, www = "blog.cognomath.org.ghs.googlehosted.com") == Names.ApexMode.Ordinary)
+    val blogAsWww = Names.apexMode(alias = false, www = "blog.cognomath.org.ghs.googlehosted.com")
+    assert(blogAsWww == Names.ApexMode.Ordinary)
+    assert(Names.httpsSetting(proxied = true, alwaysUseHttps = false, blogAsWww) == Some("off"))
+    assert(Names.httpsSetting(proxied = false, alwaysUseHttps = false, blogAsWww) == None)
     assert(Names.apexAndWwwRecords(
       "cognomath.org",
       "blog.cognomath.org.ghs.googlehosted.com",
       proxied = false,
-      alias = false
+      blogAsWww
     ) == Seq(
       Names.RecordSpec("CNAME", "@", "www.cognomath.org", proxied = false, replaceCname = false),
       Names.RecordSpec(

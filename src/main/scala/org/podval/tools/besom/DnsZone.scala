@@ -11,6 +11,7 @@ import besom.json.{JsNumber, JsString}
 import besom.types.ResourceId
 
 object DnsZone:
+  // Stacks pass these. The literal is on Names so tests can lock it without loading Besom.
   val GOOGLEHOSTED: String = Names.googleHostedCname
   val BUCKET: String = Names.bucketCname
 
@@ -77,28 +78,28 @@ open class DnsZone(
         val spec: Names.RecordSpec = Names.extraCname(name, target)
         record(spec.typ, spec.name, spec.content, proxied = spec.proxied, replaceCname = spec.replaceCname)
 
-    // ghs.googlehosted.com does not terminate TLS for a CNAME-flattened apex.
-    val googleOrigin: Boolean = www == DnsZone.GOOGLEHOSTED
+    // Alias, then www == GOOGLEHOSTED. Records, the host redirect, and Always Use HTTPS share this value.
+    val mode: Names.ApexMode = Names.apexMode(alias, www)
 
     // 192.0.2.1 is TEST-NET-1; orange-cloud so Single Redirects can run.
     val apexAndWww: Seq[Output[DnsRecord]] =
-      for spec <- Names.apexAndWwwRecords(domain, www, proxied = proxied, alias = alias) yield
+      for spec <- Names.apexAndWwwRecords(domain, www, proxied = proxied, mode) yield
         record(spec.typ, spec.name, spec.content, proxied = spec.proxied, replaceCname = spec.replaceCname)
 
-    val emitHttps: Boolean = proxied || alwaysUseHttps || alias || googleOrigin
     val alwaysHttps: Seq[Output[ZoneSetting]] =
-      if emitHttps then
-        Seq(ZoneSetting(
-          name = Names.zoneSettingPulumiName(domain, "always_use_https"),
-          args = ZoneSettingArgs(
-            zoneId = zoneId,
-            settingId = "always_use_https",
-            value = JsString(if alwaysUseHttps || alias || googleOrigin then "on" else "off")
-          ),
-          opts = cloudflareResourceOptions()
-        ))
-      else
-        Seq.empty
+      Names.httpsSetting(proxied, alwaysUseHttps, mode) match
+        case Some(value) =>
+          Seq(ZoneSetting(
+            name = Names.zoneSettingPulumiName(domain, "always_use_https"),
+            args = ZoneSettingArgs(
+              zoneId = zoneId,
+              settingId = "always_use_https",
+              value = JsString(value)
+            ),
+            opts = cloudflareResourceOptions()
+          ))
+        case None =>
+          Seq.empty
 
     val minTls: Output[ZoneSetting] = ZoneSetting(
       name = Names.zoneSettingPulumiName(domain, "min_tls_version"),
@@ -123,7 +124,7 @@ open class DnsZone(
       yield caaRecord(tag, ca)
 
     val hostRedirect: Option[(RulesetRuleArgs, String)] =
-      Names.hostRedirectFor(alias = alias, domain = domain, www = www).map { spec =>
+      Names.hostRedirectFor(domain, www, mode).map { spec =>
         (redirectRule(spec.hosts, spec.to), Names.hostRulesetDescription(domain, spec.to))
       }
 
