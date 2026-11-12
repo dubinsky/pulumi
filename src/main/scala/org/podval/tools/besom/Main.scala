@@ -79,7 +79,7 @@ abstract class Main(
     )
 
     // Stack receives these Outputs. One built inside flatMap stays in the graph only by being here.
-    // WithResources is not idempotent; this is the single call.
+    // Main calls WithResources once here, after groups() and dnsZones() have already run.
     val resources: Seq[Output[?]] = Seq(
       gcp.provider,
       cloudFlare.provider

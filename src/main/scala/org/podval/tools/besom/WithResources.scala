@@ -10,5 +10,4 @@ trait WithResources:
 
 object WithResources:
   // Not idempotent. Main calls this once, after groups() and dnsZones() have already run.
-  // GroupGCP registers during this call. DnsZone.zone already registered in dnsZones().
   def apply(components: Seq[WithResources]): Seq[Output[?]] = components.flatMap(_.resources)
