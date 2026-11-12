@@ -32,10 +32,6 @@ private[besom] object Names:
   inline def replaceCnameAlias(domain: String, name: String): String =
     s"dnsRecord:$domain-CNAME-$name"
 
-  def recordResourceName(domain: String, typ: String, name: String, replaceCname: Boolean): String =
-    if replaceCname then replaceCnamePulumiName(domain, name)
-    else dnsRecordPulumiName(domain, typ, name)
-
   inline def rulesetPulumiName(domain: String): String = s"ruleset:$domain"
   val rulesetEntrypointName: String = "default"
   val rulesetPhase: String = "http_request_dynamic_redirect"
@@ -78,7 +74,8 @@ private[besom] object Names:
     name: String,
     content: String,
     proxied: Boolean,
-    replaceCname: Boolean
+    replaceCname: Boolean,
+    priority: Option[Double] = None
   ) derives CanEqual
 
   private val orangeCloudA: String = "192.0.2.1"
@@ -120,6 +117,79 @@ private[besom] object Names:
       Some(if alwaysUseHttps || shaped then "on" else "off")
     else
       None
+
+  // When the direct Resource(...) calls inside DnsZone.resources register.
+  // Zone is not here. It registered when the DnsZone was constructed, during dnsZones().
+  // Redirects is the ruleset; it registers last. Not the Seq `resources` returns.
+  val registrationOrder: Seq[ZoneStep] = Seq(
+    ZoneStep.Mail,
+    ZoneStep.ExtraCnames,
+    ZoneStep.ApexAndWww,
+    ZoneStep.AlwaysHttps,
+    ZoneStep.MinTls,
+    ZoneStep.Dnssec,
+    ZoneStep.Caa,
+    ZoneStep.Redirects
+  )
+
+  // What DnsZone.resources returns to Stack. Not registrationOrder.
+  // Constructing in this order would register the children at the wrong time,
+  // even when the Seq handed to Stack is this one.
+  val returnedOrder: Seq[ZoneStep] = Seq(
+    ZoneStep.Zone,
+    ZoneStep.MinTls,
+    ZoneStep.Dnssec,
+    ZoneStep.AlwaysHttps,
+    ZoneStep.ExtraCnames,
+    ZoneStep.ApexAndWww,
+    ZoneStep.Redirects,
+    ZoneStep.Mail,
+    ZoneStep.Caa
+  )
+
+  private val spfRefuse: String = """"v=spf1 -all""""
+  private val spfGoogle: String = """"v=spf1 include:_spf.google.com ~all""""
+  private val dmarcReject: String = """"v=DMARC1; p=reject""""
+  private val dmarcNone: String = """"v=DMARC1; p=none""""
+  private val mxTarget: String = "smtp.google.com"
+
+  // No Workspace mail: refuse spoofing on unused names.
+  // Some DKIM: the caller's TXT, quotes included, is not wrapped again.
+  def mailRecords(domain: String, dkim: Option[String]): Seq[RecordSpec] =
+    dkim.fold(
+      Seq(
+        RecordSpec("TXT", spfDnsName(domain), spfRefuse, proxied = false, replaceCname = false),
+        RecordSpec("TXT", dmarcDnsName, dmarcReject, proxied = false, replaceCname = false)
+      )
+    )(content => Seq(
+      RecordSpec("TXT", spfDnsName(domain), spfGoogle, proxied = false, replaceCname = false),
+      RecordSpec("TXT", dkimDnsName, content, proxied = false, replaceCname = false),
+      RecordSpec("MX", mxDnsName, mxTarget, proxied = false, replaceCname = false, priority = Some(1)),
+      RecordSpec("TXT", dmarcDnsName, dmarcNone, proxied = false, replaceCname = false)
+    ))
+
+  val alwaysUseHttpsSettingId: String = "always_use_https"
+  val minTlsSettingId: String = "min_tls_version"
+  val minTlsValue: String = "1.2"
+  val dnssecStatus: String = "active"
+  val caaFlags: Int = 0
+  // Cloudflare automatic TTL. CAA passes this Int. record widens it to Double, as `ttl = 1` did.
+  val cloudflareAutomaticTtl: Int = 1
+
+  def caaPairs: Seq[(String, String)] =
+    for
+      tag <- Seq("issue", "issuewild")
+      ca <- Seq("pki.goog", "letsencrypt.org")
+    yield tag -> ca
+
+  def pathRulesetDescription(domain: String): String = s"$domain path redirects"
+
+  // Host note, then path note. The rules themselves are path, then host.
+  def rulesetDescription(hostNote: Option[String], pathNote: Option[String]): String =
+    (hostNote.toSeq ++ pathNote.toSeq).mkString("; ")
+
+  def redirectRulesInOrder[A](pathRules: Seq[A], hostRule: Option[A]): Seq[A] =
+    pathRules ++ hostRule.toSeq
 
   inline def serviceAccountPulumiName(id: String, projectId: String): String =
     s"serviceAccount:$id@$projectId"
