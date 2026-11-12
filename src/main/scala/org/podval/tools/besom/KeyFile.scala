@@ -13,6 +13,10 @@ private[besom] object KeyFile:
       throw IllegalArgumentException(s"project directory has no parent: $absolute")
     parent.resolve("Keys").resolve(s"grok-bot-$infraProjectId.json")
 
+  // Missing file, or bytes that are not the decoded JSON. Same contents: leave the file alone.
+  def shouldWriteCredentials(existing: Option[String], decodedJson: String): Boolean =
+    !existing.contains(decodedJson)
+
   // Do not create Keys. A missing directory fails and names the path.
   def requireKeysDirectory(keyFile: Path): Unit =
     val keysDirectory = keyFile.getParent

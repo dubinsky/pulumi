@@ -24,6 +24,14 @@ final class KeyFileTest extends AnyFunSuite:
     }
     assert(caught.getMessage == "project directory has no parent: /")
 
+  test("write the key file only when it is missing or its contents differ"):
+    val json = "{\"client_email\": \"a\", \"private_key\": \"b\"}\n"
+    assert(KeyFile.shouldWriteCredentials(None, json) == true)
+    assert(KeyFile.shouldWriteCredentials(Some(json), json) == false)
+    assert(KeyFile.shouldWriteCredentials(Some(json.trim), json) == true)
+    assert(KeyFile.shouldWriteCredentials(Some(json + "\n"), json) == true)
+    assert(KeyFile.shouldWriteCredentials(Some(""), json) == true)
+
   test("a missing Keys directory is named and is not created"):
     val root = Files.createTempDirectory("grok-bot-keys")
     val keys = root.resolve("Keys")

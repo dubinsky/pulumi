@@ -48,14 +48,19 @@ final class ServiceAccountKey(
   // the copy script places the desktop grok-bot-<project>.json on the guest as
   // terraform-<project>.json, which .envrc uses. This library does not read the file it writes.
   // Pulumi authenticates with GOOGLE_CREDENTIALS from .envrc.
+  // Leave the file untouched when it already holds this JSON.
   private def writeCredentials(privateKey: String): String =
     val json = credentialsJson(privateKey)
     KeyFile.requireKeysDirectory(keyFile)
-    val tmp = keyFile.resolveSibling(keyFile.getFileName.toString + ".tmp")
-    Files.writeString(tmp, json)
-    Files.setPosixFilePermissions(tmp, PosixFilePermissions.fromString("rw-------"))
-    Files.move(tmp, keyFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+    if KeyFile.shouldWriteCredentials(existingCredentials(keyFile), json) then
+      val tmp = keyFile.resolveSibling(keyFile.getFileName.toString + ".tmp")
+      Files.writeString(tmp, json)
+      Files.setPosixFilePermissions(tmp, PosixFilePermissions.fromString("rw-------"))
+      Files.move(tmp, keyFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
     keyFile.toString
+
+  private def existingCredentials(path: Path): Option[String] =
+    if Files.isRegularFile(path) then Some(Files.readString(path)) else None
 
   private def credentialsJson(privateKey: String): String =
     val trimmed = privateKey.trim
