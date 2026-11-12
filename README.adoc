@@ -218,13 +218,16 @@ Setup also requires Gradle build files for the project:
 
 - link:domain-infra/besom/settings.gradle[settings.gradle]
 - link:domain-infra/besom/build.gradle[build.gradle]
+- link:domain-infra/besom/gradle.properties[gradle.properties] (`scalaVersion=3.10.0`, the same Scala as this repository)
 
 In `build.gradle`, we declare dependencies:
 
-- Scala standard library
-- Pulumi helper classes (`org.podval.tools:org.podval.tools.pulumi`) published from this repository
-- Besom ('org.virtuslab:besom-core')
-- Besom Google Cloud Platform provider ('org.virtuslab:besom-gcp')
+- `org.virtuslab:besom-core_3:0.5.2`
+- `org.virtuslab:besom-gcp_3:9.0.0-core.0.5`
+- `org.virtuslab:besom-cloudflare_3:6.20.0-core.0.5`
+- this library, via `includeBuild` of this repository (`../..` from `domain-infra/besom`)
+
+The sample requests `org.podval.tools:org.podval.tools.pulumi:0.6.0` and that `includeBuild` substitutes this checkout. The three stacks still write that Maven coordinate and substitute the checkout.
 
 Also, we need to add Pulumi project file
 link:domain-infra/besom/Pulumi.yaml[Pulumi.yaml]
@@ -234,14 +237,14 @@ The latter specifies the Google Cloud Platform project id of the infrastructure 
 the former specifies the Google Cloud Storage bucket to use to store Pulumi state -
 until the state migrates into the bucket, those lines need to be commented out.
 
-The code is packaged as an `application` with the `tld.domain.infra.Main` as a main class:
-`pulumi` command detects the presence of Gradle build file and runs
-the application with `gradlew run --console=plain`.
+The code is packaged as an `application` with
+link:domain-infra/besom/src/main/scala/tld/domain/infra/Main.scala[`tld.domain.infra.Main`]
+as the main class. That object extends `org.podval.tools.besom.Main` and does not define `main`
+(`Main.main` is `Pulumi.run`).
+`pulumi` detects the Gradle build file and runs the application with `gradlew run --console=plain`.
 
-Sample Pulumi code is in the link:domain-infra/besom/src[domain-infra/src] folder;
-all of it is contained in one Scala file -
-link:domain-infra/src/main/scala/tld/domain/infra/besom/Main.scala[tld/domain/infra/Main.scala].
-The code uses Pulumi helper classes.
+The sample is that one Scala file, in
+link:domain-infra/besom/src[domain-infra/besom/src].
 
 == Initialize, Import and Migrate State
 
