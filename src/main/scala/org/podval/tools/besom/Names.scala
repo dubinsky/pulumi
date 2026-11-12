@@ -219,9 +219,20 @@ private[besom] object Names:
   inline def bucketIamName(bucketName: String, principalResourceName: String, role: String): String =
     s"$bucketName/$principalResourceName/role:$role"
 
-  // OrganizationIam, ProjectIam, and BucketIam prepend roles/. Stacks pass unprefixed ids.
-  // ServiceAccountKey and AlterRebbe's agent binding pass a full roles/… string and do not call this.
+  // OrganizationIam, ProjectIam, and BucketIam prepend roles/. Callers pass unprefixed ids.
+  // ServiceAccountKey passes a full roles/… string and does not call this.
   def iamRole(role: String): String = s"roles/$role"
+
+  // Google-managed agent service-<projectNumber>@gcp-sa-<service>.iam.gserviceaccount.com.
+  // The ProjectIam name segment is this member, suffix included. Account's Pulumi name drops it.
+  def serviceAgentEmail(projectNumber: String, service: String): String =
+    s"service-$projectNumber@gcp-sa-$service.iam.gserviceaccount.com"
+
+  def serviceAgentMember(projectNumber: String, service: String): String =
+    s"serviceAccount:${serviceAgentEmail(projectNumber, service)}"
+
+  def serviceAgentResourceName(projectNumber: String, service: String): String =
+    serviceAgentMember(projectNumber, service)
 
   def groupEmailAddress(name: String, domain: String): String = s"$name@$domain"
 

@@ -43,6 +43,13 @@ object Principal:
     extension(serviceAccount: Output[Account])(using ctx: Context)
       override def principalMember: Output[String] = serviceAccount.member
 
+  // Google-managed service agent. Not an Account: there is no Account resource.
+  // Name segment and member are the same string, including .iam.gserviceaccount.com.
+  // One map, the same shape as User. principalMember stays the default.
+  given Principal[ServiceAgent]:
+    extension (agent: Output[ServiceAgent])(using ctx: Context)
+      override def principalResourceName: Output[String] = agent.map(_.resourceName)
+
   // TODO
   //domain:{domain}: A G Suite domain (primary, instead of alias) name that represents all the users of that domain. For example, google.com or example.com.
   //projectOwner:projectid: Owners of the given project. For example, "projectOwner:my-example-project"
