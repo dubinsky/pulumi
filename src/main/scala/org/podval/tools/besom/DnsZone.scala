@@ -25,7 +25,7 @@ object DnsZone:
   )(using Context, CloudFlare): DnsZone =
     DnsZone(domain = domain, www = canonical, alias = true)
 
-// Open because PodvalOrgZone extends it. That subclass passes constructor arguments and does not read them.
+/** Open for `PodvalOrgZone`, which passes constructor arguments and does not read them. */
 open class DnsZone(
   domain: String,
   www: String,
@@ -231,7 +231,7 @@ open class DnsZone(
         name = Names.replaceCnamePulumiName(domain, name),
         args = args,
         opts(
-          // Literal, same pin as cloudflareResourceOptions. Not CloudflarePluginVersion.
+          // Literal, same pin as cloudflareResourceOptions. Besom rejects a val here.
           version = "6.20.0",
           aliases = SpecResourceAlias(name = Some(Names.replaceCnameAlias(domain, name))),
           deleteBeforeReplace = true

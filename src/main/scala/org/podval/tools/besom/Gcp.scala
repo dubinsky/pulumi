@@ -7,15 +7,13 @@ import besom.api.gcp.organizations.{GetBillingAccountArgs, GetOrganizationArgs, 
 
 // besom-gcp_3:9.0.0-core.0.5 plugin.json. Resources use the default provider, so the
 // version has to be on each of them; the provider resource option does not cover them.
-// This val is the invoke version. It changes in the same commit as the "9.0.0" literal.
-// CustomResourceOptions takes that literal: Besom rejects a val. The check is
-// besom.util.NonEmptyString's inline conversion, already on this compile via compileOnly
-// besom-core. version = GcpPluginVersion fails with "Only constant strings or string
-// interpolations are allowed here, use NonEmptyString.apply instead!".
+// Used by gcpInvokeOptions. InvokeOptions.version is a String, so this val is accepted there.
+// CustomResourceOptions keeps the "9.0.0" literal, changed in the same commit. Besom rejects a
+// val there: NonEmptyString allows only a constant string or a string interpolation.
 val GcpPluginVersion: String = "9.0.0"
 
-// AlterRebbe's artifact-registry agent IamMember does not call this and passes a full roles/…
-// string. That binding can drift off 9.0.0. ProjectIam would prepend roles/ a second time.
+// AlterRebbe's artifact-registry agent IamMember skips this, so that binding can drift off 9.0.0.
+// Its role is "roles/storage.objectViewer". ProjectIam would prepend "roles/" again.
 def gcpResourceOptions(ignoreChanges: String*): CustomResourceOptions =
   CustomResourceOptions(
     version = "9.0.0",

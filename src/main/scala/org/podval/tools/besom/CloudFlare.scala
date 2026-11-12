@@ -5,10 +5,7 @@ import besom.api.cloudflare.{Provider, ProviderArgs}
 
 // besom-cloudflare_3:6.20.0-core.0.5 plugin.json. Resources use the default provider, so the
 // version has to be on each of them; the provider resource option does not cover them.
-// Unused: there is no Cloudflare invoke. cloudflareResourceOptions and the CNAME→A opts(...)
-// keep the "6.20.0" literal. Besom rejects this val in CustomResourceOptions.
-val CloudflarePluginVersion: String = "6.20.0"
-
+// No Cloudflare invoke. The "6.20.0" literal stays inline: Besom rejects a val in CustomResourceOptions.
 def cloudflareResourceOptions(ignoreChanges: String*): CustomResourceOptions =
   CustomResourceOptions(
     version = "6.20.0",
