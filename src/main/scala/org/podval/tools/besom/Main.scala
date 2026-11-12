@@ -44,6 +44,31 @@ abstract class Main(
       projectRoles = Seq.empty
     )
 
+    // Guest identity. Same organization roles as terraform. The desktop keeps the terraform key.
+    val grokBotServiceAccount: ServiceAccount = ServiceAccount(
+      project = infraProject,
+      id = "grok-bot",
+      displayName = "Grok Bot",
+      description = "Service account for the cloud-infrastructure guest",
+      organizationRoles = terraformServiceAccountOrganizationRoles,
+      projectRoles = Seq.empty
+    )
+
+    val grokBotKey: ServiceAccountKey = ServiceAccountKey(
+      id = s"serviceAccount:grok-bot@$infraProjectId",
+      account = grokBotServiceAccount.account,
+      keyAdmins = Seq(
+        "terraform" -> terraformServiceAccount.account,
+        "grok-bot" -> grokBotServiceAccount.account
+      ),
+      keyFile = java.nio.file.Path.of(
+        System.getProperty("user.home"),
+        orgHome,
+        "Keys",
+        s"grok-bot-$infraProjectId.json"
+      )
+    )
+
     val adminsGroup: Group = Group(
       name = "gcp-organization-admins",
       displayName = "gcp-organization-admins",
@@ -62,6 +87,8 @@ abstract class Main(
         stateBucket,
         infraProject,
         terraformServiceAccount,
+        grokBotServiceAccount,
+        grokBotKey,
         adminsGroup
       ) ++
       groups ++
@@ -76,8 +103,16 @@ abstract class Main(
         org = gcp.orgId,
         billingAccount = gcp.billingAccountId,
         directoryCustomer = gcp.directoryCustomerId,
-        cloudFlareAccount = cloudFlare.accountId
+        cloudFlareAccount = cloudFlare.accountId,
+        grokBotKeyFile = grokBotKey.keyFilePath
       )
+
+  // Directory under $HOME that holds this org's Keys. The guest does not write the key file.
+  private def orgHome: String = domain match
+    case "podval.org" => "Podval"
+    case "opentorah.org" => "OpenTorah"
+    case "cognomath.org" => "CognoMath"
+    case other => throw IllegalArgumentException(s"no Keys directory for $other")
 
   def administrators(using gcp: Gcp): Seq[User]
 
