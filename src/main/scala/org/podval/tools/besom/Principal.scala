@@ -10,7 +10,6 @@ sealed trait Principal[A]:
     def principalResourceName: Output[String]
     def principalMember: Output[String] = principalResourceName
 
-// TODO add all allowed Principal kinds
 object Principal:
   // A special identifier that represents anyone who is on the internet; with or without a Google account.
   object AllUsers
@@ -50,8 +49,4 @@ object Principal:
     extension (agent: Output[ServiceAgent])(using ctx: Context)
       override def principalResourceName: Output[String] = agent.map(_.resourceName)
 
-  // TODO
-  //domain:{domain}: A G Suite domain (primary, instead of alias) name that represents all the users of that domain. For example, google.com or example.com.
-  //projectOwner:projectid: Owners of the given project. For example, "projectOwner:my-example-project"
-  //projectEditor:projectid: Editors of the given project. For example, "projectEditor:my-example-project"
-  //projectViewer:projectid: Viewers of the given project. For example, "projectViewer:my-example-project"
+  // No stack uses domain:, projectOwner:, projectEditor:, or projectViewer:.

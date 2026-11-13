@@ -19,7 +19,7 @@ final class Bucket(
   val bucket: Output[BucketGCP] = BucketGCP(name, BucketArgs(
     project = project.project.projectId,
     // Pulumi name and GCS name are this same string. state.$domain has no type prefix.
-    name = name, // TODO do I need this?
+    name = name,
     storageClass = storageClass,
     location = location,
     // Independent of isPublic. Public reads are the BucketIam binding.

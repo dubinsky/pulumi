@@ -11,7 +11,7 @@ final class Project(
   services: Seq[String],
   labels: Map[String, String] = Map.empty,
   // Games and Firebase pass false by name. The default stays true.
-  autoCreateNetwork: Boolean = true // TODO do I need the default network?
+  autoCreateNetwork: Boolean = true
 )(using ctx: Context, gcp: Gcp) extends WithResources:
   // Public. AlterRebbe reads projectId and number.
   val project: Output[ProjectGCP] = ProjectGCP(name = Names.projectPulumiName(id), ProjectArgs(

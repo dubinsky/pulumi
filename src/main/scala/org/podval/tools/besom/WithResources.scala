@@ -3,7 +3,7 @@ package org.podval.tools.besom
 import besom.Output
 
 // Stack forces every Output in this Seq, including a resource built inside flatMap.
-// The type stays Seq[Output[?]] because AlterRebbe appends a raw Output.
+// The type stays Seq[Output[?]] because one component mixes resource types and Output is invariant.
 // A ComponentResource parent would change every child URN.
 trait WithResources:
   def resources: Seq[Output[?]]
