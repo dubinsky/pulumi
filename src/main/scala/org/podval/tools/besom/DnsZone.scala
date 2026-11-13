@@ -79,51 +79,27 @@ class DnsZone(
         //  10 alt3.aspmx.l.google.com
         //  10 alt4.aspmx.l.google.com
         Names.mailRecords(domain, dkim).map { spec =>
-          record(
-            spec.typ,
-            spec.name,
-            spec.content,
-            proxied = spec.proxied,
-            priority = spec.priority,
-            replaceCname = spec.replaceCname
-          )
+          record(spec)
         }
 
       case ZoneStep.ExtraCnames =>
         for (name, target) <- this.cnames yield
-          val spec: Names.RecordSpec = Names.extraCname(name, target)
-          record(spec.typ, spec.name, spec.content, proxied = spec.proxied, replaceCname = spec.replaceCname)
+          record(Names.extraCname(name, target))
 
       case ZoneStep.ApexAndWww =>
         // 192.0.2.1 is TEST-NET-1; orange-cloud so Single Redirects can run.
         for spec <- Names.apexAndWwwRecords(domain, www, proxied = proxied, mode) yield
-          record(spec.typ, spec.name, spec.content, proxied = spec.proxied, replaceCname = spec.replaceCname)
+          record(spec)
 
       case ZoneStep.AlwaysHttps =>
         Names.httpsSetting(proxied, alwaysUseHttps, mode) match
           case Some(value) =>
-            Seq(ZoneSetting(
-              name = Names.zoneSettingPulumiName(domain, Names.alwaysUseHttpsSettingId),
-              args = ZoneSettingArgs(
-                zoneId = zoneId,
-                settingId = Names.alwaysUseHttpsSettingId,
-                value = JsString(value)
-              ),
-              opts = cloudflareResourceOptions()
-            ))
+            Seq(zoneSetting(Names.alwaysUseHttpsSettingId, value))
           case None =>
             Seq.empty
 
       case ZoneStep.MinTls =>
-        Seq(ZoneSetting(
-          name = Names.zoneSettingPulumiName(domain, Names.minTlsSettingId),
-          args = ZoneSettingArgs(
-            zoneId = zoneId,
-            settingId = Names.minTlsSettingId,
-            value = JsString(Names.minTlsValue)
-          ),
-          opts = cloudflareResourceOptions()
-        ))
+        Seq(zoneSetting(Names.minTlsSettingId, Names.minTlsValue))
 
       case ZoneStep.Dnssec =>
         Seq(ZoneDnssec(
@@ -212,6 +188,17 @@ class DnsZone(
     )
   )
 
+  private def zoneSetting(settingId: String, value: String): Output[ZoneSetting] =
+    ZoneSetting(
+      name = Names.zoneSettingPulumiName(domain, settingId),
+      args = ZoneSettingArgs(
+        zoneId = zoneId,
+        settingId = settingId,
+        value = JsString(value)
+      ),
+      opts = cloudflareResourceOptions()
+    )
+
   private def caaRecord(tag: String, ca: String): Output[DnsRecord] =
     DnsRecord(
       name = Names.caaPulumiName(domain, tag, ca),
@@ -223,6 +210,17 @@ class DnsZone(
         ttl = Names.cloudflareAutomaticTtl
       ),
       opts = cloudflareResourceOptions()
+    )
+
+  private def record(spec: Names.RecordSpec): Output[DnsRecord] =
+    record(
+      spec.typ,
+      spec.name,
+      spec.content,
+      proxied = spec.proxied,
+      ttl = Names.cloudflareAutomaticTtl,
+      priority = spec.priority,
+      replaceCname = spec.replaceCname
     )
 
   private def record(
