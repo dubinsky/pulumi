@@ -12,7 +12,7 @@ import java.util.Base64
 // account before the key resource. The guest account needs the same role so its own preview can read the key.
 // The provider returns the JSON base64-encoded. The file written here is the decoded credentials file.
 final class ServiceAccountKey(
-  id: String,
+  accountPulumiName: String,
   account: Output[Account],
   keyAdmins: Seq[(String, Output[Account])],
   keyFile: Path
@@ -23,7 +23,7 @@ final class ServiceAccountKey(
   // key is still created after key admin is granted.
   private val keyAdminMembers: Seq[Output[IamMember]] =
     keyAdmins.map { (label, admin) =>
-      IamMember(Names.serviceAccountKeyAdminName(id, label), IamMemberArgs(
+      IamMember(Names.serviceAccountKeyAdminName(accountPulumiName, label), IamMemberArgs(
         serviceAccountId = account.flatMap(_.name),
         member = admin.flatMap(_.member),
         // Full role id. Names.iamRole would prepend roles/ again.
@@ -32,7 +32,7 @@ final class ServiceAccountKey(
     }
 
   val key: Output[Key] =
-    Key(Names.serviceAccountKeyName(id), KeyArgs(
+    Key(Names.serviceAccountKeyName(accountPulumiName), KeyArgs(
       serviceAccountId = account.flatMap(_.name),
       privateKeyType = "TYPE_GOOGLE_CREDENTIALS_FILE"
     ), gcpServiceAccountKeyOptions(keyAdminMembers))

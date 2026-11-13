@@ -60,7 +60,7 @@ abstract class Main(
     // working directory set to the directory that contains Pulumi.yaml, so Path.of("")
     // is that directory: ~/Podval/infra writes ~/Podval/Keys/grok-bot-podval-infra.json.
     val grokBotKey: ServiceAccountKey = ServiceAccountKey(
-      id = s"serviceAccount:grok-bot@$infraProjectId",
+      accountPulumiName = Names.serviceAccountPulumiName("grok-bot", infraProjectId),
       account = grokBotServiceAccount.account,
       keyAdmins = Seq(
         "terraform" -> terraformServiceAccount.account,
