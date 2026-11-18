@@ -253,6 +253,40 @@ final class LogicalNamesTest extends AnyFunSuite:
     assert(Names.serviceAccountMemberName("grok-bot", "podval-infra") ==
       "serviceAccount:grok-bot@podval-infra.iam.gserviceaccount.com")
 
+  test("grok-bot read-only organization roles and state-bucket objectViewer"):
+    val podval = Names.serviceAccountPulumiName("grok-bot", "podval-infra")
+    assert(Names.organizationIamName(podval, "browser") ==
+      "serviceAccount:grok-bot@podval-infra/role:browser")
+    assert(Names.organizationIamName(podval, "iam.securityReviewer") ==
+      "serviceAccount:grok-bot@podval-infra/role:iam.securityReviewer")
+    assert(Names.organizationIamName(podval, "iam.serviceAccountViewer") ==
+      "serviceAccount:grok-bot@podval-infra/role:iam.serviceAccountViewer")
+    assert(Names.organizationIamName(podval, "serviceusage.serviceUsageViewer") ==
+      "serviceAccount:grok-bot@podval-infra/role:serviceusage.serviceUsageViewer")
+    assert(Names.organizationIamName(podval, "billing.viewer") ==
+      "serviceAccount:grok-bot@podval-infra/role:billing.viewer")
+    assert(Names.organizationIamName(podval, "storage.bucketViewer") ==
+      "serviceAccount:grok-bot@podval-infra/role:storage.bucketViewer")
+    assert(Names.iamRole("browser") == "roles/browser")
+    assert(Names.iamRole("iam.securityReviewer") == "roles/iam.securityReviewer")
+    assert(Names.iamRole("iam.serviceAccountViewer") == "roles/iam.serviceAccountViewer")
+    assert(Names.iamRole("serviceusage.serviceUsageViewer") == "roles/serviceusage.serviceUsageViewer")
+    assert(Names.iamRole("billing.viewer") == "roles/billing.viewer")
+    assert(Names.iamRole("storage.bucketViewer") == "roles/storage.bucketViewer")
+    assert(Names.bucketIamName("state.podval.org", podval, "storage.objectViewer") ==
+      "state.podval.org/serviceAccount:grok-bot@podval-infra/role:storage.objectViewer")
+    assert(Names.bucketIamName(
+      "state.opentorah.org",
+      Names.serviceAccountPulumiName("grok-bot", "opentorah-infra"),
+      "storage.objectViewer"
+    ) == "state.opentorah.org/serviceAccount:grok-bot@opentorah-infra/role:storage.objectViewer")
+    assert(Names.bucketIamName(
+      "state.cognomath.org",
+      Names.serviceAccountPulumiName("grok-bot", "cognomath-infra"),
+      "storage.objectViewer"
+    ) == "state.cognomath.org/serviceAccount:grok-bot@cognomath-infra/role:storage.objectViewer")
+    assert(Names.iamRole("storage.objectViewer") == "roles/storage.objectViewer")
+
   test("group, project, and service logical names"):
     assert(Names.groupEmailAddress("info", "cognomath.org") == "info@cognomath.org")
     assert(Names.groupPulumiName("info@cognomath.org") == "group:info@cognomath.org")

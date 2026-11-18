@@ -46,27 +46,37 @@ abstract class Main(
       projectRoles = Seq.empty
     )
 
-    // Guest identity. Same organization roles as terraform. The desktop keeps the terraform key.
+    // Read-only identity for pulumi preview and preview --refresh.
+    // Organization roles are grokBotServiceAccountOrganizationRoles, not the terraform list.
+    // iam.serviceAccountViewer covers keys.get, so this account is not a key admin of itself.
     val grokBotServiceAccount: ServiceAccount = ServiceAccount(
       project = infraProject,
       id = "grok-bot",
       displayName = "Grok Bot",
-      description = "Service account for the cloud-infrastructure guest",
-      organizationRoles = terraformServiceAccountOrganizationRoles,
+      description = "Read-only service account for Grok Bot previews",
+      organizationRoles = grokBotServiceAccountOrganizationRoles,
       projectRoles = Seq.empty
     )
 
     // Keys is a sibling of the project directory. pulumi runs this program with the JVM
     // working directory set to the directory that contains Pulumi.yaml, so Path.of("")
     // is that directory: ~/Podval/infra writes ~/Podval/Keys/grok-bot-podval-infra.json.
+    // terraform@ creates the key, so it keeps key admin. grok-bot does not.
     val grokBotKey: ServiceAccountKey = ServiceAccountKey(
       accountPulumiName = Names.serviceAccountPulumiName("grok-bot", infraProjectId),
       account = grokBotServiceAccount.account,
       keyAdmins = Seq(
-        "terraform" -> terraformServiceAccount.account,
-        "grok-bot" -> grokBotServiceAccount.account
+        "terraform" -> terraformServiceAccount.account
       ),
       keyFile = KeyFile.grokBotKeyFile(java.nio.file.Path.of(""), infraProjectId)
+    )
+
+    // State objects only. storage.bucketViewer on the org covers bucket metadata.
+    // Same BucketIam helper as a public objectViewer or a writer objectAdmin.
+    val grokBotStateBucketRead = BucketIam(
+      stateBucket,
+      grokBotServiceAccount.account,
+      "storage.objectViewer"
     )
 
     val adminsGroup: Group = Group(
@@ -91,6 +101,7 @@ abstract class Main(
         terraformServiceAccount,
         grokBotServiceAccount,
         grokBotKey,
+        grokBotStateBucketRead,
         adminsGroup
       ) ++
       groups ++
@@ -114,6 +125,18 @@ abstract class Main(
 
   def infraProjectServiceNames: Seq[String]
   def terraformServiceAccountOrganizationRoles: Seq[String]
+
+  // Read-only organization roles. A consumer overrides this the same way as the terraform list.
+  // Unprefixed; OrganizationIam calls Names.iamRole. The state-bucket object read is not in this list.
+  def grokBotServiceAccountOrganizationRoles: Seq[String] = Seq(
+    "browser",
+    "iam.securityReviewer",
+    "iam.serviceAccountViewer",
+    "serviceusage.serviceUsageViewer",
+    "billing.viewer",
+    "storage.bucketViewer"
+  )
+
   def organizationAdminsGroupOrganizationRoles: Seq[String]
   
   def dnsZones(using

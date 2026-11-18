@@ -5,8 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-- feat: `grok-bot` service account in each org, with the same organization roles as `terraform`, a JSON key, and
-  `iam.serviceAccountKeyAdmin` only on that service account for `terraform` and itself.
+- feat: `grok-bot` is a read-only service account for `pulumi preview` and `preview --refresh`.
+  Organization roles default to `browser`, `iam.securityReviewer`, `iam.serviceAccountViewer`,
+  `serviceusage.serviceUsageViewer`, `billing.viewer`, and `storage.bucketViewer` (override
+  `grokBotServiceAccountOrganizationRoles`). `terraform` keeps `iam.serviceAccountKeyAdmin` on that
+  service account; `grok-bot` does not. `storage.objectViewer` is granted on the state bucket only.
 - fix: pin GCP `9.0.0` and Cloudflare `6.20.0` on the provider, each resource, and the GCP invokes, so a newer installed
   plugin does not take over the default provider.
 - change: Workspace `_dmarc` is `p=none` only (no `rua=`), so receivers stop mailing aggregate reports to `dub@`.

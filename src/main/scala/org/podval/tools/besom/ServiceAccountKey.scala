@@ -8,8 +8,8 @@ import java.nio.file.{Files, Path, StandardCopyOption}
 import java.nio.file.attribute.PosixFilePermissions
 import java.util.Base64
 
-// JSON key for the cloud-infrastructure guest. terraform@ creates it, so terraform@ needs key admin on this
-// account before the key resource. The guest account needs the same role so its own preview can read the key.
+// JSON key for grok-bot. terraform@ creates it, so terraform@ needs key admin on this
+// account before the key resource. grok-bot does not: iam.serviceAccountViewer covers keys.get.
 // The provider returns the JSON base64-encoded. The file written here is the decoded credentials file.
 final class ServiceAccountKey(
   accountPulumiName: String,
@@ -44,11 +44,8 @@ final class ServiceAccountKey(
 
   override def resources: Seq[Output[?]] = keyAdminMembers :+ key
 
-  // Write on every machine, including the cloud-infrastructure guest. That copy is redundant:
-  // the copy script places the desktop grok-bot-<project>.json on the guest as
-  // terraform-<project>.json, which .envrc uses. This library reads the file only to compare
-  // contents and skip an unchanged write. Pulumi itself authenticates with GOOGLE_CREDENTIALS
-  // from .envrc, never with this file.
+  // This library reads the file only to compare contents and skip an unchanged write.
+  // Pulumi itself authenticates with GOOGLE_CREDENTIALS from .envrc, never with this file.
   // Leave the file untouched when it already holds this JSON.
   private def writeCredentials(privateKey: String): String =
     val json = credentialsJson(privateKey)
